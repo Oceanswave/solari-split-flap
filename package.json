@@ -2,14 +2,25 @@
   "name": "solari-split-flap",
   "version": "1.1.0",
   "description": "A realistic split-flap (Solari board) display component for React + TypeScript. Cycles through quotes with authentic mechanical flip animations and synthesised click sounds.",
-  "main": "src/index.ts",
-  "module": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "sideEffects": false,
   "files": [
-    "src/",
-    "demo/"
+    "dist/",
+    "demo/",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build",
     "dev": "open demo/index.html",
     "typecheck": "tsc --noEmit"
   },
@@ -25,7 +36,7 @@
     "css3",
     "web-audio"
   ],
-  "author": "",
+  "author": "Sean <sean@baristalabs.io>",
   "license": "MIT",
   "peerDependencies": {
     "react": ">=17.0.0",
