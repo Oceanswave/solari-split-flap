@@ -552,6 +552,11 @@ const SolariBoard = forwardRef<SolariBoardHandle, SolariBoardProps>(function Sol
 
       let maxTime = 0;
 
+      // Track which rows have had their colour applied so we can
+      // piggyback the colour update onto the first drum-step callback
+      // that fires for each row — no separate timer needed.
+      const colorApplied = new Set<number>();
+
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const idx = r * cols + c;
@@ -580,9 +585,23 @@ const SolariBoard = forwardRef<SolariBoardHandle, SolariBoardProps>(function Sol
             const progress = steps.length > 1 ? s / (steps.length - 1) : 1;
             const gap = minGap + (maxGap - minGap) * progress * progress;
             const ch = steps[s];
+            const isFirstFlipInRow = !colorApplied.has(r);
+            if (isFirstFlipInRow) colorApplied.add(r);
 
             const tid = setTimeout(() => {
               if (!mountedRef.current) return;
+              // Apply this row's colour in the same batch as the first flip
+              if (isFirstFlipInRow) {
+                setRowColors((prev) => {
+                  const next = { ...prev };
+                  if (targetRowColors[r]) {
+                    next[r] = targetRowColors[r];
+                  } else {
+                    delete next[r];
+                  }
+                  return next;
+                });
+              }
               setGrid((prev) => {
                 const next = prev.map((row) => row.slice());
                 next[r][c] = ch;
@@ -603,12 +622,10 @@ const SolariBoard = forwardRef<SolariBoardHandle, SolariBoardProps>(function Sol
         }
       }
 
-      // Apply each row's colour when that row's first cell starts flipping,
-      // so the colour transition is synchronised with the drum animation.
+      // For rows with no drum steps (all cells already match), apply
+      // their colour synchronously — nothing to wait for.
       for (let r = 0; r < rows; r++) {
-        const rowDelay = r * cols * charDelay;
-        const tidColor = setTimeout(() => {
-          if (!mountedRef.current) return;
+        if (!colorApplied.has(r)) {
           setRowColors((prev) => {
             const next = { ...prev };
             if (targetRowColors[r]) {
@@ -618,8 +635,7 @@ const SolariBoard = forwardRef<SolariBoardHandle, SolariBoardProps>(function Sol
             }
             return next;
           });
-        }, rowDelay);
-        timersRef.current.push(tidColor);
+        }
       }
 
       // Fire onAnimationComplete after all drums have settled

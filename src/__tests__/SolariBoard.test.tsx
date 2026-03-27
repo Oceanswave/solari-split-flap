@@ -154,14 +154,14 @@ describe('SolariBoard', () => {
 
   it('applies row colour when that row starts flipping, not before', () => {
     // 2 rows, 5 cols. Row 0 = "RED" (colored), Row 1 = empty.
-    // Row 0 first-cell delay = 0 * 5 * 50 = 0ms → colour applied at t=0
-    // Row 1 first-cell delay = 1 * 5 * 50 = 250ms
+    // "RED" is centered with pad=1, so first drum step is cell (0,1)
+    // at delay = 1 * 50 = 50ms. Colour piggybacks onto that callback.
     const value: Quote = [{ text: 'RED', color: '#ff0000' }, ''];
     const { container } = render(<SolariBoard value={value} rows={2} cols={5} />);
 
-    // At t=10ms, row 0 has started flipping → colour should be applied
+    // Advance past the first drum step at 50ms
     act(() => {
-      vi.advanceTimersByTime(10);
+      vi.advanceTimersByTime(60);
     });
 
     const board = container.firstElementChild!;

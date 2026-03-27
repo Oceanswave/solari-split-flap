@@ -519,7 +519,7 @@ function App() {
     cellTimers[index].push(tid);
   }
 
-  function drumToChar(index, target, baseDelay) {
+  function drumToChar(index, target, baseDelay, onFirstStep) {
     cancelCell(index);
     var from = drumIndex[currentChars[index]], to = drumIndex[target];
     if (from === undefined) from = 0; if (to === undefined) to = 0;
@@ -530,7 +530,8 @@ function App() {
     for (var s = 0; s < steps.length; s++) {
       var p = steps.length > 1 ? s / (steps.length - 1) : 1;
       var gap = minG + (maxG - minG) * p * p;
-      var tid = setTimeout((function(i, ch) { return function() { flipCell(i, ch); }; })(index, steps[s]), baseDelay + cum);
+      var cb = (s === 0 && onFirstStep) ? onFirstStep : null;
+      var tid = setTimeout((function(i, ch, hook) { return function() { if (hook) hook(); flipCell(i, ch); }; })(index, steps[s], cb), baseDelay + cum);
       cellTimers[index].push(tid);
       cum += gap;
     }
@@ -554,46 +555,44 @@ function App() {
     return { grid: grid, rowColors: rowColors };
   }
 
-  function applyRowColors(rowColors) {
-    for (var r = 0; r < rows; r++) {
-      for (var c = 0; c < cols; c++) {
-        var cell = cells[r * cols + c];
-        if (rowColors[r]) {
-          cell.classList.add('colored-cell');
-          cell.style.setProperty('--row-color', rowColors[r]);
-        } else {
-          cell.classList.remove('colored-cell');
-          cell.style.removeProperty('--row-color');
-        }
+  function applyRowColor(row, color) {
+    for (var c = 0; c < cols; c++) {
+      var cell = cells[row * cols + c];
+      if (color) {
+        cell.classList.add('colored-cell');
+        cell.style.setProperty('--row-color', color);
+      } else {
+        cell.classList.remove('colored-cell');
+        cell.style.removeProperty('--row-color');
       }
     }
   }
 
+  function clearAllRowColors() {
+    for (var r = 0; r < rows; r++) applyRowColor(r, null);
+  }
+
   function displayQuote(result, callback) {
     var grid = result.grid, rc = result.rowColors, maxTime = 0;
+    var colorApplied = {};
     for (var r = 0; r < rows; r++) {
-      // Apply each row's colour when that row's first cell starts flipping
-      (function(row) {
-        var rowDelay = row * cols * CHAR_DELAY;
-        setTimeout(function() {
-          for (var c = 0; c < cols; c++) {
-            var cell = cells[row * cols + c];
-            if (rc[row]) {
-              cell.classList.add('colored-cell');
-              cell.style.setProperty('--row-color', rc[row]);
-            } else {
-              cell.classList.remove('colored-cell');
-              cell.style.removeProperty('--row-color');
-            }
-          }
-        }, rowDelay);
-      })(r);
       for (var c = 0; c < cols; c++) {
         var idx = r * cols + c, target = grid[r][c], delay = idx * CHAR_DELAY;
         if (currentChars[idx] !== target) {
-          var dt = drumToChar(idx, target, delay);
+          // Piggyback colour update onto the first drum step for this row
+          var hook = null;
+          if (!colorApplied[r]) {
+            colorApplied[r] = true;
+            hook = (function(row, color) { return function() { applyRowColor(row, color); }; })(r, rc[r] || null);
+          }
+          var dt = drumToChar(idx, target, delay, hook);
           if (delay + dt > maxTime) maxTime = delay + dt;
         }
+      }
+      // If no cells changed in this row, apply colour immediately
+      if (!colorApplied[r]) {
+        colorApplied[r] = true;
+        applyRowColor(r, rc[r] || null);
       }
     }
     setTimeout(function() { if (callback) setTimeout(callback, HOLD_MS); }, maxTime + 200);
@@ -719,7 +718,7 @@ function App() {
           {text: 'COLORS!', color: '#f5c542'}
         ]));
       } else if (action === 'clear') {
-        applyRowColors({});
+        clearAllRowColors();
         for (var i = 0; i < totalCells; i++) {
           var delay = Math.floor(Math.random() * totalCells) * 5;
           (function(idx, d) { setTimeout(function() { flipCell(idx, ' '); }, d); })(i, delay);
