@@ -14,10 +14,14 @@ Inspired by the classic electromechanical displays found in airports and train s
 - Mechanical click sound via Web Audio API (synthesized, no audio files needed)
 - **Controlled mode** — drive the board from React state, animate on prop changes
 - **Uncontrolled mode** — auto-cycle through a list of quotes
+- **Imperative ref API** — `flipTo()` and `clear()` for programmatic control
+- **`onAnimationComplete`** callback when all cells finish flipping
+- **Custom drum characters** — define your own character set
+- **Responsive scaling** — `scale` prop scales all dimensions proportionally
 - Per-line colours — any row can have its own CSS colour
 - `@` shorthand still works for gold author attributions
 - Helper utilities for easy text input — just pass plain strings
-- Configurable grid size, timing, and quotes
+- Fully tested with Vitest + React Testing Library
 - Linted and formatted with [Biome](https://biomejs.dev/)
 - Available as both a **standalone HTML** page and a **React + TypeScript** component
 
@@ -67,6 +71,52 @@ const quotes = parseQuotes([
 function App() {
   return <SolariBoard quotes={quotes} />;
 }
+```
+
+### Imperative ref — programmatic control
+
+```tsx
+import { useRef } from 'react';
+import { SolariBoard, textToQuote } from 'solari-split-flap';
+import type { SolariBoardHandle } from 'solari-split-flap';
+
+function App() {
+  const boardRef = useRef<SolariBoardHandle>(null);
+
+  return (
+    <>
+      <SolariBoard ref={boardRef} />
+      <button onClick={() => boardRef.current?.flipTo(textToQuote('New message', 20))}>
+        Flip
+      </button>
+      <button onClick={() => boardRef.current?.clear()}>
+        Clear
+      </button>
+    </>
+  );
+}
+```
+
+### Animation complete callback
+
+```tsx
+<SolariBoard
+  value={message}
+  onAnimationComplete={() => console.log('All cells done flipping!')}
+/>
+```
+
+### Responsive sizing
+
+```tsx
+<SolariBoard scale={0.5} />   {/* half size — great for mobile */}
+<SolariBoard scale={2} />     {/* double size — for large displays */}
+```
+
+### Custom drum characters
+
+```tsx
+<SolariBoard drum=" 0123456789:.APM" />   {/* clock-style: digits, colon, AM/PM */}
 ```
 
 ### With authors (gold attribution)
@@ -121,10 +171,7 @@ const quotes = [
 ```tsx
 import { textToQuote } from 'solari-split-flap';
 
-// Simple
 textToQuote('The quick brown fox jumps over the lazy dog.', 20)
-
-// With colour
 textToQuote('Alert!', 20, { color: '#ff4444', author: 'System', authorColor: '#aaa' })
 ```
 
@@ -134,15 +181,19 @@ textToQuote('Alert!', 20, { color: '#ff4444', author: 'System', authorColor: '#a
 |------|------|---------|-------------|
 | `value` | `Quote` | — | **Controlled mode.** Board animates to this value on change. When set, `quotes`/`holdMs` are ignored. |
 | `quotes` | `Quote[]` | Built-in quotes | **Uncontrolled mode.** Array of quotes to auto-cycle through. Ignored when `value` is set. |
+| `ref` | `Ref<SolariBoardHandle>` | — | Imperative handle with `flipTo(quote)` and `clear()` methods. |
 | `cols` | number | `20` | Number of columns (characters per row) |
 | `rows` | number | `8` | Number of rows |
 | `defaultColor` | string | `'#f0f0f0'` | Default text colour for rows without an explicit colour |
+| `scale` | number | `1` | Scale multiplier for cell dimensions. `0.5` = half size, `2` = double, etc. |
+| `drum` | string | `' A-Z0-9.,…'` | Custom drum character sequence. Flaps cycle through this ordered string. |
 | `holdMs` | number | `5000` | Milliseconds to hold each quote before clearing |
 | `charDelay` | number | `50` | Stagger delay (ms) between cell animations |
 | `flipMs` | number | `150` | Duration of a single flap flip |
 | `minGap` | number | `35` | Fastest drum-step interval (ms) |
 | `maxGap` | number | `160` | Slowest drum-step interval (ms) |
 | `sound` | boolean | `true` | Enable/disable flip click sounds |
+| `onAnimationComplete` | `() => void` | — | Fired when all cells finish flipping to their targets. |
 | `className` | string | `''` | Additional CSS class for the board |
 | `style` | object | `{}` | Additional inline styles for the board |
 
@@ -150,7 +201,7 @@ textToQuote('Alert!', 20, { color: '#ff4444', author: 'System', authorColor: '#a
 
 ```tsx
 import { SolariBoard, textToQuote, parseQuotes } from 'solari-split-flap';
-import type { SolariBoardProps, Quote, QuoteLine, TextToQuoteOptions } from 'solari-split-flap';
+import type { SolariBoardProps, SolariBoardHandle, Quote, QuoteLine, TextToQuoteOptions } from 'solari-split-flap';
 ```
 
 ### Types
@@ -158,6 +209,11 @@ import type { SolariBoardProps, Quote, QuoteLine, TextToQuoteOptions } from 'sol
 ```tsx
 type QuoteLine = string | { text: string; color?: string };
 type Quote = QuoteLine[];
+
+interface SolariBoardHandle {
+  flipTo: (quote: Quote) => void;
+  clear: () => void;
+}
 
 interface TextToQuoteOptions {
   author?: string;
@@ -170,11 +226,13 @@ interface TextToQuoteOptions {
 
 ```bash
 npm install
+npm run test          # Vitest
+npm run test:watch    # Vitest in watch mode
 npm run lint          # Biome check
 npm run lint:fix      # Biome auto-fix
 npm run format        # Biome format
 npm run typecheck     # TypeScript --noEmit
-npm run ci            # Biome ci + typecheck (use in CI pipelines)
+npm run ci            # Biome ci + typecheck + tests
 npm run build         # Compile to dist/
 ```
 

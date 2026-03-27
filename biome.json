@@ -16,6 +16,9 @@
       },
       "suspicious": {
         "noArrayIndexKey": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off"
       }
     }
   },
@@ -33,6 +36,6 @@
     }
   },
   "files": {
-    "includes": ["src/**/*.ts", "src/**/*.tsx"]
+    "includes": ["src/**/*.ts", "src/**/*.tsx", "vitest.config.ts"]
   }
 }

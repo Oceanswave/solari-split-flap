@@ -1,4 +1,14 @@
-import { type CSSProperties, type FC, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type FC,
+  forwardRef,
+  type Ref,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,6 +36,14 @@ export interface TextToQuoteOptions {
   color?: string;
   /** CSS colour for the author line. @default '#f5c542' (gold) */
   authorColor?: string;
+}
+
+/** Imperative handle exposed via `ref` on `<SolariBoard>`. */
+export interface SolariBoardHandle {
+  /** Animate the board to a specific quote (same as changing `value`). */
+  flipTo: (quote: Quote) => void;
+  /** Clear the board (all cells flip back to blank). */
+  clear: () => void;
 }
 
 /** Props for the top-level SolariBoard component. */
@@ -68,10 +86,28 @@ export interface SolariBoardProps {
   maxGap?: number;
   /** Enable the synthesised mechanical click sound. @default true */
   sound?: boolean;
+  /**
+   * Custom drum characters. Flaps cycle through this ordered sequence.
+   * @default ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,!?\'"\\-:;()'
+   */
+  drum?: string;
+  /**
+   * Scale multiplier for cell dimensions. `1` = default (28×40px cells).
+   * Use `0.5` for half-size, `2` for double, etc.
+   * @default 1
+   */
+  scale?: number;
+  /**
+   * Callback fired when all cells have finished flipping to their targets.
+   * In uncontrolled mode, fires after each quote finishes (before the hold period).
+   */
+  onAnimationComplete?: () => void;
   /** Extra CSS class applied to the outer board div. */
   className?: string;
   /** Extra inline styles merged onto the outer board div. */
   style?: CSSProperties;
+  /** Ref for imperative handle (flipTo, clear). */
+  ref?: Ref<SolariBoardHandle>;
 }
 
 /** Internal props for a single flap cell. */
@@ -82,6 +118,12 @@ interface FlapCellProps {
   color: string;
   /** Monotonically increasing key that forces a flip even when `char` hasn't changed. */
   flipKey: number;
+  /** Cell width in px. */
+  cellWidth: number;
+  /** Cell height in px. */
+  cellHeight: number;
+  /** CSS font-size string. */
+  fontSize: string;
   /** Duration of the flip animation in ms. */
   flipMs: number;
   /** Callback fired at the start of every flip (used to trigger click sound). */
@@ -228,14 +270,21 @@ const DEFAULT_QUOTES: Quote[] = [
   ['THE MEDIUM IS', 'THE MESSAGE.', '', '@MARSHALL MCLUHAN'],
 ];
 
-/** The character drum — flaps cycle through this ordered sequence. */
-const DRUM: string[] = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,!?\'"\\-:;()'.split('');
+/** Default drum character sequence. */
+const DEFAULT_DRUM = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,!?\'"\\-:;()';
 
-/** Reverse look-up: character → index in DRUM. */
-const DRUM_INDEX: Record<string, number> = {};
-DRUM.forEach((ch, i) => {
-  DRUM_INDEX[ch] = i;
-});
+/** Build drum array and reverse look-up from a drum string. */
+function buildDrum(drumStr: string): { drum: string[]; drumIndex: Record<string, number> } {
+  const drum = drumStr.split('');
+  const drumIndex: Record<string, number> = {};
+  for (let i = 0; i < drum.length; i++) {
+    drumIndex[drum[i]] = i;
+  }
+  return { drum, drumIndex };
+}
+
+// Pre-compute for the default drum (most users)
+const DEFAULT_DRUM_DATA = buildDrum(DEFAULT_DRUM);
 
 const KEYFRAMES_ID = 'solari-keyframes';
 
@@ -277,7 +326,16 @@ function resolveLine(line: QuoteLine): { text: string; color?: string } {
 // FlapCell — a single character cell with 3-D flip animation
 // ---------------------------------------------------------------------------
 
-const FlapCell: FC<FlapCellProps> = ({ char, color, flipKey, flipMs, onFlip }) => {
+const FlapCell: FC<FlapCellProps> = ({
+  char,
+  color,
+  flipKey,
+  cellWidth,
+  cellHeight,
+  fontSize,
+  flipMs,
+  onFlip,
+}) => {
   const [displayChar, setDisplayChar] = useState<string>(' ');
   const [prevChar, setPrevChar] = useState<string>(' ');
   const [isFlipping, setIsFlipping] = useState<boolean>(false);
@@ -306,8 +364,8 @@ const FlapCell: FC<FlapCellProps> = ({ char, color, flipKey, flipMs, onFlip }) =
   const animDuration = `${flipMs / 1000}s`;
 
   return (
-    <div style={cellStyles.cell}>
-      <div style={cellStyles.flapDisplay}>
+    <div style={{ ...cellStyles.cell, width: `${cellWidth}px`, height: `${cellHeight}px` }}>
+      <div style={{ ...cellStyles.flapDisplay, fontSize }}>
         {/* Top half — shows current character */}
         <div style={cellStyles.flapTop}>
           <span style={{ ...cellStyles.flapTopChar, color }}>{displayChar}</span>
@@ -343,22 +401,31 @@ const FlapCell: FC<FlapCellProps> = ({ char, color, flipKey, flipMs, onFlip }) =
 // SolariBoard — the full board component
 // ---------------------------------------------------------------------------
 
-const SolariBoard: FC<SolariBoardProps> = ({
-  cols = 20,
-  rows = 8,
-  value,
-  quotes = DEFAULT_QUOTES,
-  defaultColor = DEFAULT_TEXT_COLOR,
-  holdMs = 5000,
-  charDelay = 50,
-  flipMs = 150,
-  minGap = 35,
-  maxGap = 160,
-  sound = true,
-  className = '',
-  style: customStyle = {},
-}) => {
+const SolariBoard = forwardRef<SolariBoardHandle, SolariBoardProps>(function SolariBoard(
+  {
+    cols = 20,
+    rows = 8,
+    value,
+    quotes = DEFAULT_QUOTES,
+    defaultColor = DEFAULT_TEXT_COLOR,
+    holdMs = 5000,
+    charDelay = 50,
+    flipMs = 150,
+    minGap = 35,
+    maxGap = 160,
+    sound = true,
+    drum: drumProp,
+    scale = 1,
+    onAnimationComplete,
+    className = '',
+    style: customStyle = {},
+  },
+  ref,
+) {
   const isControlled = value !== undefined;
+
+  // Drum data — recompute only if a custom drum string is provided
+  const { drum: DRUM, drumIndex: DRUM_INDEX } = drumProp ? buildDrum(drumProp) : DEFAULT_DRUM_DATA;
   const [grid, setGrid] = useState<string[][]>(() => createEmptyGrid(rows, cols));
   const [rowColors, setRowColors] = useState<Record<number, string>>({});
   const [flipKeys, setFlipKeys] = useState<number[]>(() =>
@@ -539,6 +606,14 @@ const SolariBoard: FC<SolariBoardProps> = ({
       // Apply row colours immediately so cells flip in their target colour
       setRowColors(targetRowColors);
 
+      // Fire onAnimationComplete after all drums have settled
+      if (onAnimationComplete) {
+        const tidComplete = setTimeout(() => {
+          if (mountedRef.current) onAnimationComplete();
+        }, maxTime + 100);
+        timersRef.current.push(tidComplete);
+      }
+
       // Fire callback after hold period
       if (callback) {
         const tid2 = setTimeout(
@@ -550,7 +625,7 @@ const SolariBoard: FC<SolariBoardProps> = ({
         timersRef.current.push(tid2);
       }
     },
-    [rows, cols, charDelay, minGap, maxGap, holdMs],
+    [rows, cols, charDelay, minGap, maxGap, holdMs, DRUM, DRUM_INDEX, onAnimationComplete],
   );
 
   // ---- Clear board: flip all cells back to space in shuffled order ----
@@ -598,6 +673,21 @@ const SolariBoard: FC<SolariBoardProps> = ({
     [rows, cols, flipMs],
   );
 
+  // ---- Imperative ref handle ----
+  useImperativeHandle(
+    ref,
+    () => ({
+      flipTo(quote: Quote) {
+        const result = layoutQuote(quote);
+        animateToGrid(result.grid, result.rowColors);
+      },
+      clear() {
+        clearBoard();
+      },
+    }),
+    [layoutQuote, animateToGrid, clearBoard],
+  );
+
   // ---- Controlled mode: animate to `value` whenever it changes ----
   useEffect(() => {
     if (!isControlled || !value) return;
@@ -642,11 +732,21 @@ const SolariBoard: FC<SolariBoardProps> = ({
     };
   }, [isControlled, quotes, layoutQuote, animateToGrid, clearBoard]);
 
+  // ---- Scaled dimensions ----
+  const cellW = Math.round(28 * scale);
+  const cellH = Math.round(40 * scale);
+  const gapPx = `${Math.round(3 * scale)}px`;
+  const padPx = `${Math.round(16 * scale)}px`;
+  const fontSize = `${(1.1 * scale).toFixed(2)}rem`;
+
   // ---- Render ----
   return (
-    <div className={className} style={{ ...boardStyles.board, ...customStyle }}>
+    <div
+      className={className}
+      style={{ ...boardStyles.board, gap: gapPx, padding: padPx, ...customStyle }}
+    >
       {Array.from({ length: rows }, (_, r) => (
-        <div key={`row-${r}`} style={boardStyles.row}>
+        <div key={`row-${r}`} style={{ ...boardStyles.row, gap: gapPx }}>
           {Array.from({ length: cols }, (_, c) => {
             const idx = r * cols + c;
             return (
@@ -657,6 +757,9 @@ const SolariBoard: FC<SolariBoardProps> = ({
                 flipKey={flipKeys[idx]}
                 flipMs={flipMs}
                 onFlip={playClick}
+                cellWidth={cellW}
+                cellHeight={cellH}
+                fontSize={fontSize}
               />
             );
           })}
@@ -664,7 +767,7 @@ const SolariBoard: FC<SolariBoardProps> = ({
       ))}
     </div>
   );
-};
+});
 
 export default SolariBoard;
 
@@ -676,8 +779,6 @@ const boardStyles: Record<string, CSSProperties> = {
   board: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '3px',
-    padding: '16px',
     background: '#1a1a1a',
     borderRadius: '8px',
     width: 'fit-content',
@@ -685,14 +786,11 @@ const boardStyles: Record<string, CSSProperties> = {
   },
   row: {
     display: 'flex',
-    gap: '3px',
   },
 };
 
 const cellStyles: Record<string, CSSProperties> = {
   cell: {
-    width: '28px',
-    height: '40px',
     perspective: '200px',
   },
   flapDisplay: {
@@ -700,7 +798,6 @@ const cellStyles: Record<string, CSSProperties> = {
     width: '100%',
     height: '100%',
     fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', ui-monospace, monospace",
-    fontSize: '1.1rem',
     fontWeight: 'bold',
     color: '#f0f0f0',
     textAlign: 'center',

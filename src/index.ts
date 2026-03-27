@@ -1,6 +1,7 @@
 export type {
   Quote,
   QuoteLine,
+  SolariBoardHandle,
   SolariBoardProps,
   TextToQuoteOptions,
 } from './SolariBoard';
