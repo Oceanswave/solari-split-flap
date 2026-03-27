@@ -1,11 +1,4 @@
-import {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  type CSSProperties,
-  type FC,
-} from 'react';
+import { type CSSProperties, type FC, useCallback, useEffect, useRef, useState } from 'react';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,7 +34,17 @@ export interface SolariBoardProps {
   cols?: number;
   /** Number of rows. @default 8 */
   rows?: number;
-  /** Array of quotes to cycle through. */
+  /**
+   * **Controlled mode.** Pass a single `Quote` and the board will animate
+   * to it whenever it changes. When set, `quotes` / `holdMs` are ignored
+   * and no auto-cycling occurs — you own the state.
+   *
+   * @example
+   * const [msg, setMsg] = useState<Quote>(['HELLO WORLD']);
+   * <SolariBoard value={msg} />
+   */
+  value?: Quote;
+  /** Array of quotes to cycle through (uncontrolled mode). Ignored when `value` is set. */
   quotes?: Quote[];
   /** Default text colour for rows without an explicit colour. @default '#f0f0f0' */
   defaultColor?: string;
@@ -110,11 +113,7 @@ const DEFAULT_TEXT_COLOR = '#f0f0f0';
  * textToQuote('The only thing we have to fear is fear itself.', 20, { author: 'FDR' })
  * textToQuote('Danger!', 20, { color: '#ff4444', author: 'System', authorColor: '#aaa' })
  */
-export function textToQuote(
-  text: string,
-  cols: number = 20,
-  options?: TextToQuoteOptions,
-): Quote {
+export function textToQuote(text: string, cols: number = 20, options?: TextToQuoteOptions): Quote {
   const opts = options ?? {};
 
   const upper = text.toUpperCase();
@@ -126,7 +125,7 @@ export function textToQuote(
     if (current.length === 0) {
       current = word;
     } else if (current.length + 1 + word.length <= cols) {
-      current += ' ' + word;
+      current += ` ${word}`;
     } else {
       rawLines.push(current);
       current = word;
@@ -135,9 +134,8 @@ export function textToQuote(
   if (current.length > 0) rawLines.push(current);
 
   // Convert to QuoteLine[], applying body colour if specified
-  const lines: Quote = opts.color
-    ? rawLines.map((l) => ({ text: l, color: opts.color! }))
-    : rawLines;
+  const bodyColor = opts.color;
+  const lines: Quote = bodyColor ? rawLines.map((l) => ({ text: l, color: bodyColor })) : rawLines;
 
   if (opts.author) {
     lines.push(opts.color ? { text: '', color: opts.color } : '');
@@ -189,14 +187,13 @@ export function parseQuotes(
 
   // Array of { text, author?, color?, authorColor? } objects
   if (typeof first === 'object' && first !== null && 'text' in first) {
-    return (
-      input as { text: string; author?: string; color?: string; authorColor?: string }[]
-    ).map((q) =>
-      textToQuote(q.text, cols, {
-        author: q.author,
-        color: q.color,
-        authorColor: q.authorColor,
-      }),
+    return (input as { text: string; author?: string; color?: string; authorColor?: string }[]).map(
+      (q) =>
+        textToQuote(q.text, cols, {
+          author: q.author,
+          color: q.color,
+          authorColor: q.authorColor,
+        }),
     );
   }
 
@@ -220,7 +217,14 @@ const DEFAULT_QUOTES: Quote[] = [
   ['TO BE OR NOT', 'TO BE, THAT IS', 'THE QUESTION.', '', '@SHAKESPEARE'],
   ['IN THE MIDDLE OF', 'DIFFICULTY LIES', 'OPPORTUNITY.', '', '@ALBERT EINSTEIN'],
   ['THAT WHICH DOES', 'NOT KILL US MAKES', 'US STRONGER.', '', '@NIETZSCHE'],
-  ['I HAVE NOT FAILED.', 'I HAVE JUST FOUND', '10000 WAYS THAT', 'WONT WORK.', '', '@THOMAS EDISON'],
+  [
+    'I HAVE NOT FAILED.',
+    'I HAVE JUST FOUND',
+    '10000 WAYS THAT',
+    'WONT WORK.',
+    '',
+    '@THOMAS EDISON',
+  ],
   ['THE MEDIUM IS', 'THE MESSAGE.', '', '@MARSHALL MCLUHAN'],
 ];
 
@@ -320,9 +324,7 @@ const FlapCell: FC<FlapCellProps> = ({ char, color, flipKey, flipMs, onFlip }) =
           style={{
             ...cellStyles.flapFlip,
             display: isFlipping ? 'block' : 'none',
-            animation: isFlipping
-              ? `solari-flap-down ${animDuration} ease-in forwards`
-              : 'none',
+            animation: isFlipping ? `solari-flap-down ${animDuration} ease-in forwards` : 'none',
           }}
         >
           <div style={cellStyles.flapFlipFront}>
@@ -344,6 +346,7 @@ const FlapCell: FC<FlapCellProps> = ({ char, color, flipKey, flipMs, onFlip }) =
 const SolariBoard: FC<SolariBoardProps> = ({
   cols = 20,
   rows = 8,
+  value,
   quotes = DEFAULT_QUOTES,
   defaultColor = DEFAULT_TEXT_COLOR,
   holdMs = 5000,
@@ -355,6 +358,7 @@ const SolariBoard: FC<SolariBoardProps> = ({
   className = '',
   style: customStyle = {},
 }) => {
+  const isControlled = value !== undefined;
   const [grid, setGrid] = useState<string[][]>(() => createEmptyGrid(rows, cols));
   const [rowColors, setRowColors] = useState<Record<number, string>>({});
   const [flipKeys, setFlipKeys] = useState<number[]>(() =>
@@ -388,7 +392,8 @@ const SolariBoard: FC<SolariBoardProps> = ({
   const initAudio = useCallback((): void => {
     if (audioCtxRef.current || !sound) return;
     try {
-      const Ctor = window.AudioContext ?? (window as any).webkitAudioContext;
+      const w = window as unknown as Record<string, typeof AudioContext>;
+      const Ctor = w.AudioContext ?? w.webkitAudioContext;
       audioCtxRef.current = new Ctor();
     } catch {
       /* browser does not support Web Audio */
@@ -475,7 +480,7 @@ const SolariBoard: FC<SolariBoardProps> = ({
       callback?: () => void,
     ): void => {
       // Cancel any in-flight timers
-      timersRef.current.forEach((t) => clearTimeout(t));
+      for (const t of timersRef.current) clearTimeout(t);
       timersRef.current = [];
 
       let maxTime = 0;
@@ -536,9 +541,12 @@ const SolariBoard: FC<SolariBoardProps> = ({
 
       // Fire callback after hold period
       if (callback) {
-        const tid2 = setTimeout(() => {
-          if (mountedRef.current) callback();
-        }, maxTime + 200 + holdMs);
+        const tid2 = setTimeout(
+          () => {
+            if (mountedRef.current) callback();
+          },
+          maxTime + 200 + holdMs,
+        );
         timersRef.current.push(tid2);
       }
     },
@@ -590,8 +598,26 @@ const SolariBoard: FC<SolariBoardProps> = ({
     [rows, cols, flipMs],
   );
 
-  // ---- Main quote cycle ----
+  // ---- Controlled mode: animate to `value` whenever it changes ----
   useEffect(() => {
+    if (!isControlled || !value) return;
+
+    mountedRef.current = true;
+    const result = layoutQuote(value);
+    animateToGrid(result.grid, result.rowColors);
+
+    return () => {
+      mountedRef.current = false;
+      for (const t of timersRef.current) clearTimeout(t);
+      timersRef.current = [];
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isControlled, value, layoutQuote, animateToGrid]);
+
+  // ---- Uncontrolled mode: auto-cycle through `quotes` ----
+  useEffect(() => {
+    if (isControlled) return;
+
     mountedRef.current = true;
     shuffledRef.current = shuffle(quotes);
     qIndexRef.current = 0;
@@ -611,21 +637,21 @@ const SolariBoard: FC<SolariBoardProps> = ({
     return () => {
       mountedRef.current = false;
       clearTimeout(startTid);
-      timersRef.current.forEach((t) => clearTimeout(t));
+      for (const t of timersRef.current) clearTimeout(t);
       timersRef.current = [];
     };
-  }, [quotes, layoutQuote, animateToGrid, clearBoard]);
+  }, [isControlled, quotes, layoutQuote, animateToGrid, clearBoard]);
 
   // ---- Render ----
   return (
     <div className={className} style={{ ...boardStyles.board, ...customStyle }}>
       {Array.from({ length: rows }, (_, r) => (
-        <div key={r} style={boardStyles.row}>
+        <div key={`row-${r}`} style={boardStyles.row}>
           {Array.from({ length: cols }, (_, c) => {
             const idx = r * cols + c;
             return (
               <FlapCell
-                key={idx}
+                key={`cell-${r}-${c}`}
                 char={grid[r][c]}
                 color={rowColors[r] ?? defaultColor}
                 flipKey={flipKeys[idx]}
@@ -673,8 +699,7 @@ const cellStyles: Record<string, CSSProperties> = {
     position: 'relative',
     width: '100%',
     height: '100%',
-    fontFamily:
-      "'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', ui-monospace, monospace",
+    fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', ui-monospace, monospace",
     fontSize: '1.1rem',
     fontWeight: 'bold',
     color: '#f0f0f0',

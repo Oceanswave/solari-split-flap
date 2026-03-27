@@ -12,10 +12,13 @@ Inspired by the classic electromechanical displays found in airports and train s
 - Authentic split-flap flip animation using CSS 3D transforms
 - Character drum cycling — characters flip through the full alphabet like a real Solari board
 - Mechanical click sound via Web Audio API (synthesized, no audio files needed)
+- **Controlled mode** — drive the board from React state, animate on prop changes
+- **Uncontrolled mode** — auto-cycle through a list of quotes
 - Per-line colours — any row can have its own CSS colour
 - `@` shorthand still works for gold author attributions
 - Helper utilities for easy text input — just pass plain strings
 - Configurable grid size, timing, and quotes
+- Linted and formatted with [Biome](https://biomejs.dev/)
 - Available as both a **standalone HTML** page and a **React + TypeScript** component
 
 ## Quick Start — Standalone HTML
@@ -28,7 +31,29 @@ Open `demo/index.html` in your browser. That's it — no build step, no dependen
 npm install solari-split-flap
 ```
 
-### Simplest usage — just pass strings
+### Controlled mode — drive it from React state
+
+Pass a single `value` and the board animates to it whenever it changes. No auto-cycling — you own the state.
+
+```tsx
+import { useState } from 'react';
+import { SolariBoard, textToQuote } from 'solari-split-flap';
+
+function App() {
+  const [message, setMessage] = useState(textToQuote('Hello world', 20));
+
+  return (
+    <>
+      <SolariBoard value={message} />
+      <button onClick={() => setMessage(textToQuote('Goodbye world', 20))}>
+        Change
+      </button>
+    </>
+  );
+}
+```
+
+### Uncontrolled mode — auto-cycle through quotes
 
 ```tsx
 import { SolariBoard, parseQuotes } from 'solari-split-flap';
@@ -57,10 +82,10 @@ const quotes = parseQuotes([
 
 ```tsx
 const quotes = parseQuotes([
-  { text: 'System online.', color: '#4ade80' },                          // green body
-  { text: 'Warning: disk full.', color: '#f87171' },                     // red body
-  { text: 'Welcome aboard!', color: '#60a5fa', author: 'Captain' },      // blue body, gold author
-  { text: 'Danger!', color: '#ff4444', author: 'System', authorColor: '#aaaaaa' }, // red body, grey author
+  { text: 'System online.', color: '#4ade80' },
+  { text: 'Warning: disk full.', color: '#f87171' },
+  { text: 'Welcome aboard!', color: '#60a5fa', author: 'Captain' },
+  { text: 'Danger!', color: '#ff4444', author: 'System', authorColor: '#aaaaaa' },
 ]);
 ```
 
@@ -107,9 +132,10 @@ textToQuote('Alert!', 20, { color: '#ff4444', author: 'System', authorColor: '#a
 
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
+| `value` | `Quote` | — | **Controlled mode.** Board animates to this value on change. When set, `quotes`/`holdMs` are ignored. |
+| `quotes` | `Quote[]` | Built-in quotes | **Uncontrolled mode.** Array of quotes to auto-cycle through. Ignored when `value` is set. |
 | `cols` | number | `20` | Number of columns (characters per row) |
 | `rows` | number | `8` | Number of rows |
-| `quotes` | `Quote[]` | Built-in quotes | Array of quotes to cycle through |
 | `defaultColor` | string | `'#f0f0f0'` | Default text colour for rows without an explicit colour |
 | `holdMs` | number | `5000` | Milliseconds to hold each quote before clearing |
 | `charDelay` | number | `50` | Stagger delay (ms) between cell animations |
@@ -138,6 +164,18 @@ interface TextToQuoteOptions {
   color?: string;         // body line colour
   authorColor?: string;   // author line colour (default: '#f5c542' gold)
 }
+```
+
+## Development
+
+```bash
+npm install
+npm run lint          # Biome check
+npm run lint:fix      # Biome auto-fix
+npm run format        # Biome format
+npm run typecheck     # TypeScript --noEmit
+npm run ci            # Biome ci + typecheck (use in CI pipelines)
+npm run build         # Compile to dist/
 ```
 
 ## How It Works
