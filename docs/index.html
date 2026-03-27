@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solari Split-Flap Display — React Component</title>
+  <meta name="description" content="A faithful recreation of the classic Solari split-flap display as a React/TypeScript component. Click sounds, drum animation, per-line colors.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #141414;
+      --surface-2: #1e1e1e;
+      --border: #2a2a2a;
+      --text: #e8e8e8;
+      --text-dim: #888;
+      --accent: #f5c542;
+      --accent-dim: #c9a033;
+      --flap-top: #2a2a2a;
+      --flap-bottom: #222;
+      --board-bg: #1a1a1a;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      text-align: center;
+      padding: 60px 20px 40px;
+    }
+    .hero h1 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+    }
+    .hero h1 span { color: var(--accent); }
+    .hero p {
+      color: var(--text-dim);
+      font-size: clamp(0.95rem, 2vw, 1.15rem);
+      max-width: 520px;
+      margin: 0 auto 28px;
+    }
+    .badges {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: #4ade80; }
+
+    /* ── Board Section ── */
+    .board-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 20px 40px;
+    }
+
+    .split-flap-board {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 16px;
+      background: var(--board-bg);
+      border-radius: 10px;
+      width: fit-content;
+      margin: 0 auto;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04),
+        0 20px 60px rgba(0,0,0,0.6),
+        inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+    .split-flap-row { display: flex; gap: 3px; }
+    .split-flap-cell { width: 28px; height: 40px; perspective: 200px; }
+    .flap-display {
+      position: relative; width: 100%; height: 100%;
+      font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+      font-size: 1.1rem; font-weight: 700;
+      color: var(--text); text-align: center;
+    }
+    .flap-top {
+      position: absolute; top: 0; left: 0; width: 100%; height: 50%;
+      background: var(--flap-top); border-radius: 3px 3px 0 0; overflow: hidden; z-index: 1;
+    }
+    .flap-top .flap-char {
+      position: absolute; top: 0; left: 0; width: 100%; height: 200%;
+      display: flex; align-items: center; justify-content: center; line-height: 1;
+    }
+    .flap-bottom {
+      position: absolute; bottom: 0; left: 0; width: 100%; height: 50%;
+      background: var(--flap-bottom); border-radius: 0 0 3px 3px; overflow: hidden; z-index: 1;
+    }
+    .flap-bottom .flap-char {
+      position: absolute; bottom: 0; left: 0; width: 100%; height: 200%;
+      display: flex; align-items: center; justify-content: center; line-height: 1;
+    }
+    .flap-flip {
+      position: absolute; top: 0; left: 0; width: 100%; height: 50%;
+      transform-origin: center bottom; transform-style: preserve-3d;
+      z-index: 10; pointer-events: none; display: none;
+    }
+    .flap-flip.flipping { display: block; animation: flapDown 0.15s ease-in forwards; }
+    .flap-flip-front {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: var(--flap-top); border-radius: 3px 3px 0 0;
+      backface-visibility: hidden; overflow: hidden;
+    }
+    .flap-flip-front .flap-char {
+      position: absolute; top: 0; left: 0; width: 100%; height: 200%;
+      display: flex; align-items: center; justify-content: center; line-height: 1;
+    }
+    .flap-flip-back {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: var(--flap-bottom); border-radius: 0 0 3px 3px;
+      backface-visibility: hidden; transform: rotateX(180deg); overflow: hidden;
+    }
+    .flap-flip-back .flap-char {
+      position: absolute; bottom: 0; left: 0; width: 100%; height: 200%;
+      display: flex; align-items: center; justify-content: center; line-height: 1;
+    }
+    .flap-top::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0;
+      height: 1px; background: var(--bg); z-index: 5;
+    }
+    .colored-cell .flap-top .flap-char,
+    .colored-cell .flap-bottom .flap-char,
+    .colored-cell .flap-flip-front .flap-char,
+    .colored-cell .flap-flip-back .flap-char {
+      color: var(--row-color);
+    }
+    @keyframes flapDown {
+      0%   { transform: rotateX(0deg); }
+      100% { transform: rotateX(-180deg); }
+    }
+
+    /* ── Controls Panel ── */
+    .controls {
+      margin-top: 32px;
+      width: 100%;
+      max-width: 620px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .control-row {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .control-row textarea {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      padding: 12px 14px;
+      resize: vertical;
+      min-height: 80px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .control-row textarea:focus { border-color: var(--accent-dim); }
+    .control-row textarea::placeholder { color: #555; }
+
+    .btn-group { display: flex; flex-direction: column; gap: 8px; }
+
+    button {
+      padding: 10px 20px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+    .btn-primary:hover { background: #ffd666; border-color: #ffd666; }
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .btn-secondary:hover { background: #282828; }
+    .btn-secondary.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+    }
+
+    .quick-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .quick-actions button {
+      padding: 6px 14px;
+      font-size: 0.78rem;
+      border-radius: 6px;
+    }
+
+    /* ── Install Section ── */
+    .install-section {
+      padding: 60px 20px;
+      max-width: 680px;
+      margin: 0 auto;
+    }
+    .install-section h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    .code-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--text);
+      overflow-x: auto;
+      position: relative;
+      margin-bottom: 16px;
+    }
+    .code-block .comment { color: #6a9955; }
+    .code-block .keyword { color: #c586c0; }
+    .code-block .string { color: #ce9178; }
+    .code-block .tag { color: #569cd6; }
+    .code-block .attr { color: #9cdcfe; }
+    .code-block .copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 4px 10px;
+      font-size: 0.72rem;
+      border-radius: 4px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .code-block .copy-btn:hover { color: var(--text); }
+
+    /* ── Features Grid ── */
+    .features {
+      padding: 40px 20px 60px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .features h2 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .feature-card h3 {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .feature-card p {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-dim);
+      font-size: 0.82rem;
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .split-flap-cell { width: 18px; height: 28px; }
+      .flap-display { font-size: 0.75rem; }
+      .split-flap-board { gap: 2px; padding: 8px; }
+      .split-flap-row { gap: 2px; }
+      .control-row { flex-direction: column; }
+      .btn-group { flex-direction: row; }
+    }
+    @media (max-width: 480px) {
+      .split-flap-cell { width: 14px; height: 22px; }
+      .flap-display { font-size: 0.6rem; }
+      .hero { padding: 40px 16px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <section class="hero">
+    <h1><span>Solari</span> Split-Flap Display</h1>
+    <p>A faithful recreation of the classic split-flap departure board, built as a React + TypeScript component.</p>
+    <div class="badges">
+      <span class="badge"><span class="dot"></span> React 17+</span>
+      <span class="badge">TypeScript</span>
+      <span class="badge">Zero Dependencies</span>
+      <span class="badge">3.2 kB gzip</span>
+    </div>
+  </section>
+
+  <section class="board-section">
+    <div class="split-flap-board" id="board" data-cols="20" data-rows="8"></div>
+
+    <div class="controls">
+      <div class="control-row">
+        <textarea id="custom-text" placeholder="Type your own message...&#10;Lines starting with @ appear in gold.&#10;&#10;e.g.&#10;HELLO WORLD&#10;@YOUR NAME"></textarea>
+        <div class="btn-group">
+          <button class="btn-primary" id="btn-flip" title="Flip to your text">Flip It</button>
+          <button class="btn-secondary" id="btn-sound" title="Toggle click sounds">Sound: Off</button>
+          <button class="btn-secondary" id="btn-auto" title="Resume auto-cycling">Auto</button>
+        </div>
+      </div>
+      <div class="quick-actions">
+        <button class="btn-secondary" data-quote="hello">Hello World</button>
+        <button class="btn-secondary" data-quote="time">Current Time</button>
+        <button class="btn-secondary" data-quote="countdown">Countdown</button>
+        <button class="btn-secondary" data-quote="color">Color Demo</button>
+        <button class="btn-secondary" data-quote="clear">Clear Board</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="install-section">
+    <h2>Get Started</h2>
+    <div class="code-block">
+      <button class="copy-btn" data-copy="npm install solari-split-flap">Copy</button>
+      npm install solari-split-flap
+    </div>
+    <div class="code-block">
+      <button class="copy-btn" data-copy="import { SolariBoard } from 'solari-split-flap';
+
+function App() {
+  return <SolariBoard sound />;
+}">Copy</button>
+      <span class="keyword">import</span> { <span class="tag">SolariBoard</span> } <span class="keyword">from</span> <span class="string">'solari-split-flap'</span>;<br><br>
+      <span class="keyword">function</span> <span class="tag">App</span>() {<br>
+      &nbsp;&nbsp;<span class="keyword">return</span> &lt;<span class="tag">SolariBoard</span> <span class="attr">sound</span> /&gt;;<br>
+      }
+    </div>
+  </section>
+
+  <section class="features">
+    <h2>Features</h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <h3>Authentic Animation</h3>
+        <p>CSS 3D transforms with perspective and backface-visibility. Characters drum through in sequence with decelerating easing.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Synthesized Sound</h3>
+        <p>Web Audio API click on every flap — white noise burst through a highpass filter with exponential gain decay.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Per-Line Colors</h3>
+        <p>Any row can have its own color. Use the <code>@</code> prefix shorthand for gold author attribution lines.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Controlled Mode</h3>
+        <p>Use the <code>value</code> prop for standard React controlled behavior. Board animates whenever value changes.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Imperative Ref</h3>
+        <p>Call <code>ref.flipTo()</code> and <code>ref.clear()</code> directly for programmatic control outside React state.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Responsive Scale</h3>
+        <p>A single <code>scale</code> prop proportionally resizes cells, gaps, padding, and font size for any viewport.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Custom Drum</h3>
+        <p>Supply your own character sequence via the <code>drum</code> prop. Characters cycle through your drum on every flip.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Zero Dependencies</h3>
+        <p>Only peer-depends on React. No runtime dependencies. Tree-shakeable ESM with full TypeScript declarations.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Built by <a href="https://github.com/oceanswave">Sean</a> &middot;
+    <a href="https://github.com/oceanswave/solari-split-flap">GitHub</a> &middot;
+    <a href="https://www.npmjs.com/package/solari-split-flap">npm</a> &middot;
+    MIT License
+  </footer>
+
+  <script>
+(function() {
+  // ── Board engine (same as component, vanilla JS for the demo) ──
+  var board = document.getElementById('board');
+  var cols = 20, rows = 8, totalCells = cols * rows;
+  var currentChars = [];
+  var FLIP_MS = 150, CHAR_DELAY = 50, HOLD_MS = 5000;
+  var audioCtx = null, soundEnabled = false;
+  var autoMode = true, autoTimer = null;
+
+  // Build DOM
+  for (var r = 0; r < rows; r++) {
+    var rowEl = document.createElement('div');
+    rowEl.className = 'split-flap-row';
+    rowEl.dataset.row = r;
+    for (var c = 0; c < cols; c++) {
+      var cell = document.createElement('div');
+      cell.className = 'split-flap-cell';
+      cell.innerHTML =
+        '<div class="flap-display">' +
+          '<div class="flap-top"><span class="flap-char"> </span></div>' +
+          '<div class="flap-bottom"><span class="flap-char"> </span></div>' +
+          '<div class="flap-flip">' +
+            '<div class="flap-flip-front"><span class="flap-char"> </span></div>' +
+            '<div class="flap-flip-back"><span class="flap-char"> </span></div>' +
+          '</div>' +
+        '</div>';
+      rowEl.appendChild(cell);
+      currentChars.push(' ');
+    }
+    board.appendChild(rowEl);
+  }
+  var cells = board.querySelectorAll('.split-flap-cell');
+
+  // ── Audio ──
+  function initAudio() {
+    if (audioCtx) return;
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); soundEnabled = true; } catch(e) {}
+  }
+  function playClick() {
+    if (!soundEnabled || !audioCtx) return;
+    var dur = 0.012, now = audioCtx.currentTime;
+    var buf = audioCtx.createBuffer(1, Math.ceil(audioCtx.sampleRate * dur), audioCtx.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.3;
+    var src = audioCtx.createBufferSource(); src.buffer = buf;
+    var flt = audioCtx.createBiquadFilter(); flt.type = 'highpass'; flt.frequency.value = 1800 + Math.random() * 400;
+    var g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.08 + Math.random() * 0.04, now);
+    g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    src.connect(flt); flt.connect(g); g.connect(audioCtx.destination);
+    src.start(now); src.stop(now + dur);
+  }
+
+  // ── Drum ──
+  var drum = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,!?\'"-:;()'.split('');
+  var drumIndex = {};
+  for (var di = 0; di < drum.length; di++) drumIndex[drum[di]] = di;
+
+  var cellTimers = [];
+  for (var ct = 0; ct < totalCells; ct++) cellTimers.push([]);
+
+  function cancelCell(i) {
+    for (var t = 0; t < cellTimers[i].length; t++) clearTimeout(cellTimers[i][t]);
+    cellTimers[i] = [];
+  }
+
+  function flipCell(index, newChar) {
+    var cell = cells[index]; if (!cell) return;
+    if (currentChars[index] === newChar) return;
+    var topC = cell.querySelector('.flap-top .flap-char');
+    var botC = cell.querySelector('.flap-bottom .flap-char');
+    var flip = cell.querySelector('.flap-flip');
+    var fF = cell.querySelector('.flap-flip-front .flap-char');
+    var fB = cell.querySelector('.flap-flip-back .flap-char');
+    fF.textContent = currentChars[index]; fB.textContent = newChar;
+    botC.textContent = newChar;
+    flip.classList.remove('flipping'); void flip.offsetWidth; flip.classList.add('flipping');
+    playClick();
+    var tid = setTimeout(function() { topC.textContent = newChar; flip.classList.remove('flipping'); currentChars[index] = newChar; }, FLIP_MS);
+    cellTimers[index].push(tid);
+  }
+
+  function drumToChar(index, target, baseDelay) {
+    cancelCell(index);
+    var from = drumIndex[currentChars[index]], to = drumIndex[target];
+    if (from === undefined) from = 0; if (to === undefined) to = 0;
+    var steps = [], pos = from;
+    while (pos !== to) { pos = (pos + 1) % drum.length; steps.push(drum[pos]); }
+    if (!steps.length) return 0;
+    var minG = 35, maxG = 160, cum = 0;
+    for (var s = 0; s < steps.length; s++) {
+      var p = steps.length > 1 ? s / (steps.length - 1) : 1;
+      var gap = minG + (maxG - minG) * p * p;
+      var tid = setTimeout((function(i, ch) { return function() { flipCell(i, ch); }; })(index, steps[s]), baseDelay + cum);
+      cellTimers[index].push(tid);
+      cum += gap;
+    }
+    return cum + FLIP_MS;
+  }
+
+  // ── Layout ──
+  function layoutQuote(lines) {
+    var grid = [], rowColors = {};
+    for (var r = 0; r < rows; r++) { var row = []; for (var c = 0; c < cols; c++) row.push(' '); grid.push(row); }
+    var used = Math.min(lines.length, rows), start = Math.floor((rows - used) / 2);
+    for (var l = 0; l < used; l++) {
+      var raw = lines[l], color = null;
+      if (typeof raw === 'object' && raw.text !== undefined) { color = raw.color || null; raw = raw.text; }
+      var isAt = typeof raw === 'string' && raw.charAt(0) === '@';
+      if (isAt) { raw = raw.substring(1); color = color || '#f5c542'; }
+      if (color) rowColors[start + l] = color;
+      var pad = Math.floor((cols - raw.length) / 2);
+      for (var ch = 0; ch < raw.length && pad + ch < cols; ch++) grid[start + l][pad + ch] = raw[ch];
+    }
+    return { grid: grid, rowColors: rowColors };
+  }
+
+  function applyRowColors(rowColors) {
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var cell = cells[r * cols + c];
+        if (rowColors[r]) {
+          cell.classList.add('colored-cell');
+          cell.style.setProperty('--row-color', rowColors[r]);
+        } else {
+          cell.classList.remove('colored-cell');
+          cell.style.removeProperty('--row-color');
+        }
+      }
+    }
+  }
+
+  function displayQuote(result, callback) {
+    var grid = result.grid, rc = result.rowColors, maxTime = 0;
+    // Clear colors first, apply after animation
+    applyRowColors({});
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var idx = r * cols + c, target = grid[r][c], delay = idx * CHAR_DELAY;
+        if (currentChars[idx] !== target) {
+          var dt = drumToChar(idx, target, delay);
+          if (delay + dt > maxTime) maxTime = delay + dt;
+        }
+      }
+    }
+    setTimeout(function() { applyRowColors(rc); }, maxTime + 100);
+    setTimeout(function() { if (callback) setTimeout(callback, HOLD_MS); }, maxTime + 200);
+  }
+
+  // ── Quotes ──
+  var quotes = [
+    ['DESIGN IS NOT JUST','WHAT IT LOOKS LIKE.','DESIGN IS HOW','IT WORKS.','','@STEVE JOBS'],
+    ['SIMPLICITY IS THE','ULTIMATE','SOPHISTICATION.','','@LEONARDO DA VINCI'],
+    ['MAKE IT SIMPLE,','BUT SIGNIFICANT.','','@DON DRAPER'],
+    ['STAY HUNGRY.','STAY FOOLISH.','','@STEVE JOBS'],
+    ['HAVE THE COURAGE','TO FOLLOW YOUR','HEART AND','INTUITION.','','@STEVE JOBS'],
+    ['I THINK,','THEREFORE I AM.','','@RENE DESCARTES'],
+    ['THE ONLY THING WE','HAVE TO FEAR IS','FEAR ITSELF.','','@FDR'],
+    ['IMAGINATION IS','MORE IMPORTANT','THAN KNOWLEDGE.','','@ALBERT EINSTEIN'],
+    ['TO BE OR NOT','TO BE, THAT IS','THE QUESTION.','','@SHAKESPEARE'],
+    ['IN THE MIDDLE OF','DIFFICULTY LIES','OPPORTUNITY.','','@ALBERT EINSTEIN'],
+    ['THAT WHICH DOES','NOT KILL US MAKES','US STRONGER.','','@NIETZSCHE'],
+    ['I HAVE NOT FAILED.','I HAVE JUST FOUND','10000 WAYS THAT','WONT WORK.','','@THOMAS EDISON'],
+    ['THE MEDIUM IS','THE MESSAGE.','','@MARSHALL MCLUHAN']
+  ];
+
+  // Shuffle
+  var shuffled = quotes.slice();
+  for (var si = shuffled.length - 1; si > 0; si--) {
+    var sj = Math.floor(Math.random() * (si + 1));
+    var tmp = shuffled[si]; shuffled[si] = shuffled[sj]; shuffled[sj] = tmp;
+  }
+
+  var qIndex = 0;
+  function cycle() {
+    if (!autoMode) return;
+    var q = shuffled[qIndex % shuffled.length];
+    displayQuote(layoutQuote(q), function() {
+      qIndex++;
+      if (autoMode) cycle();
+    });
+  }
+
+  function stopAuto() { autoMode = false; if (autoTimer) { clearTimeout(autoTimer); autoTimer = null; } }
+  function startAuto() {
+    autoMode = true;
+    qIndex = 0;
+    cycle();
+    document.getElementById('btn-auto').classList.add('active');
+  }
+
+  // Start auto-cycling
+  autoTimer = setTimeout(cycle, 500);
+
+  // ── Controls ──
+  var btnFlip = document.getElementById('btn-flip');
+  var btnSound = document.getElementById('btn-sound');
+  var btnAuto = document.getElementById('btn-auto');
+  var textarea = document.getElementById('custom-text');
+
+  btnFlip.addEventListener('click', function() {
+    initAudio();
+    stopAuto();
+    btnAuto.classList.remove('active');
+    var text = textarea.value.trim();
+    if (!text) return;
+    var lines = text.toUpperCase().split('\n').slice(0, rows);
+    // Truncate each line to cols
+    lines = lines.map(function(l) {
+      if (l.charAt(0) === '@') return '@' + l.substring(1).substring(0, cols);
+      return l.substring(0, cols);
+    });
+    displayQuote(layoutQuote(lines));
+  });
+
+  btnSound.addEventListener('click', function() {
+    initAudio();
+    soundEnabled = !soundEnabled;
+    btnSound.textContent = 'Sound: ' + (soundEnabled ? 'On' : 'Off');
+    if (soundEnabled) btnSound.classList.add('active'); else btnSound.classList.remove('active');
+  });
+
+  btnAuto.addEventListener('click', function() {
+    initAudio();
+    if (autoMode) { stopAuto(); btnAuto.classList.remove('active'); }
+    else { startAuto(); }
+  });
+
+  // Quick action buttons
+  document.querySelectorAll('[data-quote]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      initAudio();
+      stopAuto();
+      btnAuto.classList.remove('active');
+      var action = btn.dataset.quote;
+      if (action === 'hello') {
+        displayQuote(layoutQuote(['','HELLO WORLD!','','@SOLARI SPLIT-FLAP']));
+      } else if (action === 'time') {
+        var now = new Date();
+        var h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+        var ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12 || 12;
+        var timeStr = (h < 10 ? ' ' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s + ' ' + ampm;
+        var dateStr = now.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+        var fullDate = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }).toUpperCase();
+        displayQuote(layoutQuote([dateStr, fullDate, '', timeStr]));
+      } else if (action === 'countdown') {
+        var count = 10;
+        function tick() {
+          if (count < 0) {
+            displayQuote(layoutQuote([{text: 'LIFTOFF!', color: '#4ade80'}]));
+            return;
+          }
+          var label = count === 0 ? {text: 'GO!', color: '#f87171'} : 'T-MINUS ' + count;
+          displayQuote(layoutQuote([label]), function() {});
+          count--;
+          setTimeout(tick, 1200);
+        }
+        tick();
+      } else if (action === 'color') {
+        displayQuote(layoutQuote([
+          {text: 'RED LINE', color: '#f87171'},
+          {text: 'GREEN LINE', color: '#4ade80'},
+          {text: 'BLUE LINE', color: '#60a5fa'},
+          {text: 'PURPLE LINE', color: '#c084fc'},
+          '',
+          {text: 'COLORS!', color: '#f5c542'}
+        ]));
+      } else if (action === 'clear') {
+        applyRowColors({});
+        for (var i = 0; i < totalCells; i++) {
+          var delay = Math.floor(Math.random() * totalCells) * 5;
+          (function(idx, d) { setTimeout(function() { flipCell(idx, ' '); }, d); })(i, delay);
+        }
+      }
+    });
+  });
+
+  // Copy buttons
+  document.querySelectorAll('.copy-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var text = btn.dataset.copy;
+      navigator.clipboard.writeText(text).then(function() {
+        btn.textContent = 'Copied!';
+        setTimeout(function() { btn.textContent = 'Copy'; }, 1500);
+      });
+    });
+  });
+
+  // Init audio on any click
+  document.addEventListener('click', function() { initAudio(); }, { once: true });
+})();
+  </script>
+</body>
+</html>
