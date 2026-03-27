@@ -571,8 +571,8 @@ function App() {
 
   function displayQuote(result, callback) {
     var grid = result.grid, rc = result.rowColors, maxTime = 0;
-    // Clear colors first, apply after animation
-    applyRowColors({});
+    // Apply colors immediately so cells flip in their target colour
+    applyRowColors(rc);
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
         var idx = r * cols + c, target = grid[r][c], delay = idx * CHAR_DELAY;
@@ -582,7 +582,6 @@ function App() {
         }
       }
     }
-    setTimeout(function() { applyRowColors(rc); }, maxTime + 100);
     setTimeout(function() { if (callback) setTimeout(callback, HOLD_MS); }, maxTime + 200);
   }
 

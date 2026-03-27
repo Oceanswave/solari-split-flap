@@ -151,4 +151,49 @@ describe('SolariBoard', () => {
     const { container } = render(<SolariBoard quotes={quotes} rows={4} cols={10} />);
     expect(container.firstElementChild!.children).toHaveLength(4);
   });
+
+  it('applies row colours during flip animation, not just after', () => {
+    const value: Quote = [{ text: 'RED', color: '#ff0000' }];
+    const { container } = render(<SolariBoard value={value} rows={3} cols={5} />);
+
+    // Advance just enough for the first drum step to fire (cell 0 delay = 0ms)
+    // but NOT enough for the full animation to complete
+    act(() => {
+      vi.advanceTimersByTime(10);
+    });
+
+    // Row 1 (vertically centered in 3 rows) should already have red text colour
+    // on its character spans — not the default #f0f0f0
+    const board = container.firstElementChild!;
+    const centeredRow = board.children[1]; // row index 1 in a 3-row board
+    const firstCell = centeredRow.children[0];
+
+    // Find all .flap-char equivalent spans (positioned absolute, used for display)
+    const spans = firstCell.querySelectorAll('span');
+    // jsdom normalises hex to rgb, so check for either form
+    const hasRedSpan = Array.from(spans).some((span) => {
+      const c = (span as HTMLElement).style.color;
+      return c === '#ff0000' || c === 'rgb(255, 0, 0)';
+    });
+    expect(hasRedSpan).toBe(true);
+  });
+
+  it('does not show colour on non-coloured rows during flip', () => {
+    const value: Quote = ['PLAIN', { text: 'RED', color: '#ff0000' }];
+    const { container } = render(<SolariBoard value={value} rows={4} cols={5} />);
+
+    act(() => {
+      vi.advanceTimersByTime(10);
+    });
+
+    const board = container.firstElementChild!;
+    // "PLAIN" is on row 1 (centered in 4 rows), should use default colour
+    const plainRow = board.children[1];
+    const firstCell = plainRow.children[0];
+    const spans = firstCell.querySelectorAll('span');
+    const hasDefaultColor = Array.from(spans).every(
+      (span) => (span as HTMLElement).style.color !== '#ff0000',
+    );
+    expect(hasDefaultColor).toBe(true);
+  });
 });
