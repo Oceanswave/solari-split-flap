@@ -32,7 +32,7 @@ Open `demo/index.html` in your browser. That's it — no build step, no dependen
 ## React Component
 
 ```bash
-npm install solari-split-flap
+npm install @oceanswave/solari-split-flap
 ```
 
 ### Controlled mode — drive it from React state
@@ -41,7 +41,7 @@ Pass a single `value` and the board animates to it whenever it changes. No auto-
 
 ```tsx
 import { useState } from 'react';
-import { SolariBoard, textToQuote } from 'solari-split-flap';
+import { SolariBoard, textToQuote } from '@oceanswave/solari-split-flap';
 
 function App() {
   const [message, setMessage] = useState(textToQuote('Hello world', 20));
@@ -60,7 +60,7 @@ function App() {
 ### Uncontrolled mode — auto-cycle through quotes
 
 ```tsx
-import { SolariBoard, parseQuotes } from 'solari-split-flap';
+import { SolariBoard, parseQuotes } from '@oceanswave/solari-split-flap';
 
 const quotes = parseQuotes([
   'The only limit is your imagination.',
@@ -77,8 +77,8 @@ function App() {
 
 ```tsx
 import { useRef } from 'react';
-import { SolariBoard, textToQuote } from 'solari-split-flap';
-import type { SolariBoardHandle } from 'solari-split-flap';
+import { SolariBoard, textToQuote } from '@oceanswave/solari-split-flap';
+import type { SolariBoardHandle } from '@oceanswave/solari-split-flap';
 
 function App() {
   const boardRef = useRef<SolariBoardHandle>(null);
@@ -169,7 +169,7 @@ const quotes = [
 ### Word-wrap a single string
 
 ```tsx
-import { textToQuote } from 'solari-split-flap';
+import { textToQuote } from '@oceanswave/solari-split-flap';
 
 textToQuote('The quick brown fox jumps over the lazy dog.', 20)
 textToQuote('Alert!', 20, { color: '#ff4444', author: 'System', authorColor: '#aaa' })
@@ -200,8 +200,8 @@ textToQuote('Alert!', 20, { color: '#ff4444', author: 'System', authorColor: '#a
 ### Exports
 
 ```tsx
-import { SolariBoard, textToQuote, parseQuotes } from 'solari-split-flap';
-import type { SolariBoardProps, SolariBoardHandle, Quote, QuoteLine, TextToQuoteOptions } from 'solari-split-flap';
+import { SolariBoard, textToQuote, parseQuotes } from '@oceanswave/solari-split-flap';
+import type { SolariBoardProps, SolariBoardHandle, Quote, QuoteLine, TextToQuoteOptions } from '@oceanswave/solari-split-flap';
 ```
 
 ### Types
