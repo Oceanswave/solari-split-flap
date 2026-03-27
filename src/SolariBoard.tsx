@@ -603,8 +603,24 @@ const SolariBoard = forwardRef<SolariBoardHandle, SolariBoardProps>(function Sol
         }
       }
 
-      // Apply row colours immediately so cells flip in their target colour
-      setRowColors(targetRowColors);
+      // Apply each row's colour when that row's first cell starts flipping,
+      // so the colour transition is synchronised with the drum animation.
+      for (let r = 0; r < rows; r++) {
+        const rowDelay = r * cols * charDelay;
+        const tidColor = setTimeout(() => {
+          if (!mountedRef.current) return;
+          setRowColors((prev) => {
+            const next = { ...prev };
+            if (targetRowColors[r]) {
+              next[r] = targetRowColors[r];
+            } else {
+              delete next[r];
+            }
+            return next;
+          });
+        }, rowDelay);
+        timersRef.current.push(tidColor);
+      }
 
       // Fire onAnimationComplete after all drums have settled
       if (onAnimationComplete) {

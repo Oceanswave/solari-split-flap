@@ -152,25 +152,21 @@ describe('SolariBoard', () => {
     expect(container.firstElementChild!.children).toHaveLength(4);
   });
 
-  it('applies row colours during flip animation, not just after', () => {
-    const value: Quote = [{ text: 'RED', color: '#ff0000' }];
-    const { container } = render(<SolariBoard value={value} rows={3} cols={5} />);
+  it('applies row colour when that row starts flipping, not before', () => {
+    // 2 rows, 5 cols. Row 0 = "RED" (colored), Row 1 = empty.
+    // Row 0 first-cell delay = 0 * 5 * 50 = 0ms → colour applied at t=0
+    // Row 1 first-cell delay = 1 * 5 * 50 = 250ms
+    const value: Quote = [{ text: 'RED', color: '#ff0000' }, ''];
+    const { container } = render(<SolariBoard value={value} rows={2} cols={5} />);
 
-    // Advance just enough for the first drum step to fire (cell 0 delay = 0ms)
-    // but NOT enough for the full animation to complete
+    // At t=10ms, row 0 has started flipping → colour should be applied
     act(() => {
       vi.advanceTimersByTime(10);
     });
 
-    // Row 1 (vertically centered in 3 rows) should already have red text colour
-    // on its character spans — not the default #f0f0f0
     const board = container.firstElementChild!;
-    const centeredRow = board.children[1]; // row index 1 in a 3-row board
-    const firstCell = centeredRow.children[0];
-
-    // Find all .flap-char equivalent spans (positioned absolute, used for display)
-    const spans = firstCell.querySelectorAll('span');
-    // jsdom normalises hex to rgb, so check for either form
+    const row0Cell = board.children[0].children[0];
+    const spans = row0Cell.querySelectorAll('span');
     const hasRedSpan = Array.from(spans).some((span) => {
       const c = (span as HTMLElement).style.color;
       return c === '#ff0000' || c === 'rgb(255, 0, 0)';
@@ -178,7 +174,10 @@ describe('SolariBoard', () => {
     expect(hasRedSpan).toBe(true);
   });
 
-  it('does not show colour on non-coloured rows during flip', () => {
+  it('does not apply colour to a row before that row starts flipping', () => {
+    // 4 rows, 5 cols. Lines centered → row 1 = "PLAIN", row 2 = "RED" (colored).
+    // Row 2 first-cell delay = 2 * 5 * 50 = 500ms.
+    // At t=10ms row 2 has NOT started → should still be default colour.
     const value: Quote = ['PLAIN', { text: 'RED', color: '#ff0000' }];
     const { container } = render(<SolariBoard value={value} rows={4} cols={5} />);
 
@@ -187,13 +186,26 @@ describe('SolariBoard', () => {
     });
 
     const board = container.firstElementChild!;
-    // "PLAIN" is on row 1 (centered in 4 rows), should use default colour
-    const plainRow = board.children[1];
-    const firstCell = plainRow.children[0];
+    // "RED" is on row 2 (centered in 4 rows)
+    const redRow = board.children[2];
+    const firstCell = redRow.children[0];
     const spans = firstCell.querySelectorAll('span');
-    const hasDefaultColor = Array.from(spans).every(
-      (span) => (span as HTMLElement).style.color !== '#ff0000',
-    );
-    expect(hasDefaultColor).toBe(true);
+    const noRedYet = Array.from(spans).every((span) => {
+      const c = (span as HTMLElement).style.color;
+      return c !== '#ff0000' && c !== 'rgb(255, 0, 0)';
+    });
+    expect(noRedYet).toBe(true);
+
+    // Now advance past row 2's start → colour should appear
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+
+    const spansAfter = firstCell.querySelectorAll('span');
+    const hasRedNow = Array.from(spansAfter).some((span) => {
+      const c = (span as HTMLElement).style.color;
+      return c === '#ff0000' || c === 'rgb(255, 0, 0)';
+    });
+    expect(hasRedNow).toBe(true);
   });
 });

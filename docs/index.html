@@ -571,9 +571,23 @@ function App() {
 
   function displayQuote(result, callback) {
     var grid = result.grid, rc = result.rowColors, maxTime = 0;
-    // Apply colors immediately so cells flip in their target colour
-    applyRowColors(rc);
     for (var r = 0; r < rows; r++) {
+      // Apply each row's colour when that row's first cell starts flipping
+      (function(row) {
+        var rowDelay = row * cols * CHAR_DELAY;
+        setTimeout(function() {
+          for (var c = 0; c < cols; c++) {
+            var cell = cells[row * cols + c];
+            if (rc[row]) {
+              cell.classList.add('colored-cell');
+              cell.style.setProperty('--row-color', rc[row]);
+            } else {
+              cell.classList.remove('colored-cell');
+              cell.style.removeProperty('--row-color');
+            }
+          }
+        }, rowDelay);
+      })(r);
       for (var c = 0; c < cols; c++) {
         var idx = r * cols + c, target = grid[r][c], delay = idx * CHAR_DELAY;
         if (currentChars[idx] !== target) {
