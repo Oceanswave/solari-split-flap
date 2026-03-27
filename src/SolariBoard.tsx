@@ -75,6 +75,89 @@ interface LayoutResult {
 }
 
 // ---------------------------------------------------------------------------
+// Public Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Word-wrap a plain text string into lines that fit a given column width.
+ * An optional `author` is appended as a gold attribution row.
+ *
+ * @example
+ * textToQuote('The only thing we have to fear is fear itself.', 20, 'FDR')
+ * // => ['THE ONLY THING WE', 'HAVE TO FEAR IS', 'FEAR ITSELF.', '', '@FDR']
+ */
+export function textToQuote(text: string, cols: number = 20, author?: string): Quote {
+  const upper = text.toUpperCase();
+  const words = upper.split(/\s+/);
+  const lines: string[] = [];
+  let current = '';
+
+  for (const word of words) {
+    if (current.length === 0) {
+      current = word;
+    } else if (current.length + 1 + word.length <= cols) {
+      current += ' ' + word;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  if (current.length > 0) lines.push(current);
+
+  if (author) {
+    lines.push('');
+    lines.push('@' + author.toUpperCase());
+  }
+
+  return lines;
+}
+
+/**
+ * Parse a variety of convenient input formats into `Quote[]`.
+ *
+ * Accepted inputs:
+ * - A single string → auto-wrapped into one quote
+ * - An array of strings → each string becomes one auto-wrapped quote
+ * - An array of `{ text, author? }` objects → auto-wrapped with optional attribution
+ * - A `Quote[]` (array of string arrays) → passed through as-is
+ *
+ * @example
+ * parseQuotes('Hello world')
+ * parseQuotes(['Quote one', 'Quote two'])
+ * parseQuotes([{ text: 'Be yourself.', author: 'Oscar Wilde' }])
+ */
+export function parseQuotes(
+  input: string | string[] | { text: string; author?: string }[] | Quote[],
+  cols: number = 20,
+): Quote[] {
+  // Single string
+  if (typeof input === 'string') {
+    return [textToQuote(input, cols)];
+  }
+
+  if (!Array.isArray(input) || input.length === 0) {
+    return [];
+  }
+
+  const first = input[0];
+
+  // Already Quote[] (array of string arrays)
+  if (Array.isArray(first)) {
+    return input as Quote[];
+  }
+
+  // Array of { text, author? } objects
+  if (typeof first === 'object' && first !== null && 'text' in first) {
+    return (input as { text: string; author?: string }[]).map((q) =>
+      textToQuote(q.text, cols, q.author),
+    );
+  }
+
+  // Array of plain strings
+  return (input as string[]).map((s) => textToQuote(s, cols));
+}
+
+// ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
@@ -391,11 +474,8 @@ const SolariBoard: FC<SolariBoardProps> = ({
         }
       }
 
-      // Apply author row styling after all drums have settled
-      const tid1 = setTimeout(() => {
-        if (mountedRef.current) setAuthorRows(targetAuthorRows);
-      }, maxTime + 100);
-      timersRef.current.push(tid1);
+      // Apply author row styling immediately so cells flip in colour
+      setAuthorRows(targetAuthorRows);
 
       // Fire callback after hold period
       if (callback) {

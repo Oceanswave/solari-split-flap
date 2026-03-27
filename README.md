@@ -12,10 +12,10 @@ Inspired by the classic electromechanical displays found in airports and train s
 - Authentic split-flap flip animation using CSS 3D transforms
 - Character drum cycling — characters flip through the full alphabet like a real Solari board
 - Mechanical click sound via Web Audio API (synthesized, no audio files needed)
-- Author attribution rendered in gold/yellow
-- Responsive design with mobile breakpoints
+- Author attribution rendered in gold (animated in-colour during flips)
 - Configurable grid size, timing, and quotes
-- Available as both a **standalone HTML** page and a **React component**
+- Helper utilities for easy text input — just pass plain strings
+- Available as both a **standalone HTML** page and a **React + TypeScript** component
 
 ## Quick Start — Standalone HTML
 
@@ -23,32 +23,58 @@ Open `demo/index.html` in your browser. That's it — no build step, no dependen
 
 ## React Component
 
-```jsx
-import { SolariBoard } from 'solari-split-flap';
+```bash
+npm install solari-split-flap
+```
+
+### Simplest usage — just pass strings
+
+```tsx
+import { SolariBoard, parseQuotes } from 'solari-split-flap';
+
+const quotes = parseQuotes([
+  'The only limit is your imagination.',
+  'Stay hungry. Stay foolish.',
+  'Make it simple, but significant.',
+]);
 
 function App() {
-  return <SolariBoard />;
+  return <SolariBoard quotes={quotes} />;
 }
 ```
 
-### Props
+### With authors
 
-| Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| `cols` | number | `20` | Number of columns (characters per row) |
-| `rows` | number | `8` | Number of rows |
-| `quotes` | string[][] | Built-in quotes | Array of quotes, each an array of lines. Prefix a line with `@` for author styling. |
-| `holdMs` | number | `4000` | Milliseconds to hold each quote before clearing |
-| `charDelay` | number | `8` | Stagger delay (ms) between cell animations |
-| `sound` | boolean | `true` | Enable/disable flip click sounds |
-| `className` | string | `''` | Additional CSS class for the board |
-| `style` | object | `{}` | Additional inline styles for the board |
+```tsx
+import { SolariBoard, parseQuotes } from 'solari-split-flap';
 
-### Custom Quotes
+const quotes = parseQuotes([
+  { text: 'The only thing we have to fear is fear itself.', author: 'FDR' },
+  { text: 'I think, therefore I am.', author: 'Descartes' },
+  { text: 'Imagination is more important than knowledge.', author: 'Einstein' },
+]);
 
-```jsx
+function App() {
+  return <SolariBoard quotes={quotes} />;
+}
+```
+
+### Word-wrap a single string
+
+```tsx
+import { textToQuote } from 'solari-split-flap';
+
+const quote = textToQuote('The quick brown fox jumps over the lazy dog.', 20);
+// => ['THE QUICK BROWN FOX', 'JUMPS OVER THE LAZY', 'DOG.']
+```
+
+### Advanced — manual line control
+
+If you need precise control over where lines break, pass `Quote[]` (arrays of strings) directly:
+
+```tsx
 const myQuotes = [
-  ['HELLO WORLD', '', '@PROGRAMMER'],
+  ['HELLO WORLD', '', '@A PROGRAMMER'],
   ['THE QUICK BROWN', 'FOX JUMPS OVER', 'THE LAZY DOG.'],
 ];
 
@@ -56,6 +82,29 @@ const myQuotes = [
 ```
 
 Lines prefixed with `@` are rendered in gold as author attributions.
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `cols` | number | `20` | Number of columns (characters per row) |
+| `rows` | number | `8` | Number of rows |
+| `quotes` | `Quote[]` | Built-in quotes | Array of quotes to cycle through |
+| `holdMs` | number | `5000` | Milliseconds to hold each quote before clearing |
+| `charDelay` | number | `50` | Stagger delay (ms) between cell animations |
+| `flipMs` | number | `150` | Duration of a single flap flip |
+| `minGap` | number | `35` | Fastest drum-step interval (ms) |
+| `maxGap` | number | `160` | Slowest drum-step interval (ms) |
+| `sound` | boolean | `true` | Enable/disable flip click sounds |
+| `className` | string | `''` | Additional CSS class for the board |
+| `style` | object | `{}` | Additional inline styles for the board |
+
+### Exports
+
+```tsx
+import { SolariBoard, textToQuote, parseQuotes } from 'solari-split-flap';
+import type { SolariBoardProps, Quote } from 'solari-split-flap';
+```
 
 ## How It Works
 
