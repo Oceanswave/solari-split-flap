@@ -1,0 +1,35 @@
+{
+  "name": "solari-split-flap",
+  "version": "1.0.0",
+  "description": "A realistic split-flap (Solari board) display component for React. Cycles through quotes with authentic mechanical flip animations and sound.",
+  "main": "src/index.js",
+  "module": "src/index.js",
+  "files": [
+    "src/",
+    "demo/"
+  ],
+  "scripts": {
+    "dev": "open demo/index.html"
+  },
+  "keywords": [
+    "solari",
+    "split-flap",
+    "flip-board",
+    "departure-board",
+    "react",
+    "component",
+    "animation",
+    "css3",
+    "web-audio"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=17.0.0",
+    "react-dom": ">=17.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}
