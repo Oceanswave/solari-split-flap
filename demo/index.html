@@ -217,8 +217,8 @@
   var totalCells = cols * rows;
   var currentChars = [];
   var FLIP_MS = 150;
-  var CHAR_DELAY = 8;
-  var HOLD_MS = 4000;
+  var CHAR_DELAY = 50;
+  var HOLD_MS = 5000;
   var audioCtx = null;
   var soundEnabled = false;
 
@@ -547,7 +547,7 @@
       var idx = indices[k];
       var r = Math.floor(idx / cols);
       var c = idx % cols;
-      var delay = k * 3;
+      var delay = k * 5;
       if (currentChars[idx] !== ' ') {
         (function(i, d) {
           setTimeout(function() { flipCell(i, ' '); }, d);
