@@ -12,9 +12,10 @@ Inspired by the classic electromechanical displays found in airports and train s
 - Authentic split-flap flip animation using CSS 3D transforms
 - Character drum cycling — characters flip through the full alphabet like a real Solari board
 - Mechanical click sound via Web Audio API (synthesized, no audio files needed)
-- Author attribution rendered in gold (animated in-colour during flips)
-- Configurable grid size, timing, and quotes
+- Per-line colours — any row can have its own CSS colour
+- `@` shorthand still works for gold author attributions
 - Helper utilities for easy text input — just pass plain strings
+- Configurable grid size, timing, and quotes
 - Available as both a **standalone HTML** page and a **React + TypeScript** component
 
 ## Quick Start — Standalone HTML
@@ -43,20 +44,51 @@ function App() {
 }
 ```
 
-### With authors
+### With authors (gold attribution)
 
 ```tsx
-import { SolariBoard, parseQuotes } from 'solari-split-flap';
-
 const quotes = parseQuotes([
   { text: 'The only thing we have to fear is fear itself.', author: 'FDR' },
   { text: 'I think, therefore I am.', author: 'Descartes' },
-  { text: 'Imagination is more important than knowledge.', author: 'Einstein' },
 ]);
+```
 
-function App() {
-  return <SolariBoard quotes={quotes} />;
-}
+### Custom colours per quote
+
+```tsx
+const quotes = parseQuotes([
+  { text: 'System online.', color: '#4ade80' },                          // green body
+  { text: 'Warning: disk full.', color: '#f87171' },                     // red body
+  { text: 'Welcome aboard!', color: '#60a5fa', author: 'Captain' },      // blue body, gold author
+  { text: 'Danger!', color: '#ff4444', author: 'System', authorColor: '#aaaaaa' }, // red body, grey author
+]);
+```
+
+### Per-line colour control
+
+Each line in a quote can be a plain string or a `{ text, color? }` object — mix and match freely:
+
+```tsx
+const quotes = [
+  [
+    { text: 'RED ALERT', color: '#ff4444' },
+    { text: 'ALL SYSTEMS', color: '#ffffff' },
+    { text: 'NOMINAL', color: '#4ade80' },
+  ],
+  [
+    'PLAIN WHITE LINE',
+    { text: 'GOLD ACCENT', color: '#f5c542' },
+    '@CLASSIC AUTHOR STYLE',       // still works — gold via @ prefix
+  ],
+];
+
+<SolariBoard quotes={quotes} />
+```
+
+### Board-wide default colour
+
+```tsx
+<SolariBoard defaultColor="#60a5fa" />   {/* all text blue unless overridden */}
 ```
 
 ### Word-wrap a single string
@@ -64,24 +96,12 @@ function App() {
 ```tsx
 import { textToQuote } from 'solari-split-flap';
 
-const quote = textToQuote('The quick brown fox jumps over the lazy dog.', 20);
-// => ['THE QUICK BROWN FOX', 'JUMPS OVER THE LAZY', 'DOG.']
+// Simple
+textToQuote('The quick brown fox jumps over the lazy dog.', 20)
+
+// With colour
+textToQuote('Alert!', 20, { color: '#ff4444', author: 'System', authorColor: '#aaa' })
 ```
-
-### Advanced — manual line control
-
-If you need precise control over where lines break, pass `Quote[]` (arrays of strings) directly:
-
-```tsx
-const myQuotes = [
-  ['HELLO WORLD', '', '@A PROGRAMMER'],
-  ['THE QUICK BROWN', 'FOX JUMPS OVER', 'THE LAZY DOG.'],
-];
-
-<SolariBoard quotes={myQuotes} cols={20} rows={6} />
-```
-
-Lines prefixed with `@` are rendered in gold as author attributions.
 
 ### Props
 
@@ -90,6 +110,7 @@ Lines prefixed with `@` are rendered in gold as author attributions.
 | `cols` | number | `20` | Number of columns (characters per row) |
 | `rows` | number | `8` | Number of rows |
 | `quotes` | `Quote[]` | Built-in quotes | Array of quotes to cycle through |
+| `defaultColor` | string | `'#f0f0f0'` | Default text colour for rows without an explicit colour |
 | `holdMs` | number | `5000` | Milliseconds to hold each quote before clearing |
 | `charDelay` | number | `50` | Stagger delay (ms) between cell animations |
 | `flipMs` | number | `150` | Duration of a single flap flip |
@@ -103,7 +124,20 @@ Lines prefixed with `@` are rendered in gold as author attributions.
 
 ```tsx
 import { SolariBoard, textToQuote, parseQuotes } from 'solari-split-flap';
-import type { SolariBoardProps, Quote } from 'solari-split-flap';
+import type { SolariBoardProps, Quote, QuoteLine, TextToQuoteOptions } from 'solari-split-flap';
+```
+
+### Types
+
+```tsx
+type QuoteLine = string | { text: string; color?: string };
+type Quote = QuoteLine[];
+
+interface TextToQuoteOptions {
+  author?: string;
+  color?: string;         // body line colour
+  authorColor?: string;   // author line colour (default: '#f5c542' gold)
+}
 ```
 
 ## How It Works

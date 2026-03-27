@@ -12,11 +12,28 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
+ * A single line within a quote.
+ * - Plain string — rendered in the default colour (`#f0f0f0`).
+ *   Prefix with `@` for gold author attribution (`#f5c542`).
+ * - Object — `text` is the content, `color` sets the CSS colour for that row.
+ */
+export type QuoteLine = string | { text: string; color?: string };
+
+/**
  * A single quote to display on the board.
  * Each element is one row of text.
- * Prefix a line with `@` to mark it as an author attribution (rendered in gold).
  */
-export type Quote = string[];
+export type Quote = QuoteLine[];
+
+/** Options for {@link textToQuote}. */
+export interface TextToQuoteOptions {
+  /** Author attribution appended as a gold line. */
+  author?: string;
+  /** CSS colour applied to every body line (not the author line). */
+  color?: string;
+  /** CSS colour for the author line. @default '#f5c542' (gold) */
+  authorColor?: string;
+}
 
 /** Props for the top-level SolariBoard component. */
 export interface SolariBoardProps {
@@ -26,6 +43,8 @@ export interface SolariBoardProps {
   rows?: number;
   /** Array of quotes to cycle through. */
   quotes?: Quote[];
+  /** Default text colour for rows without an explicit colour. @default '#f0f0f0' */
+  defaultColor?: string;
   /** How long (ms) each quote is held on screen before clearing. @default 5000 */
   holdMs?: number;
   /**
@@ -56,8 +75,8 @@ export interface SolariBoardProps {
 interface FlapCellProps {
   /** The target character this cell should display. */
   char: string;
-  /** Whether this cell is on an author-attributed row (gold text). */
-  isAuthor: boolean;
+  /** CSS colour for this cell's text. */
+  color: string;
   /** Monotonically increasing key that forces a flip even when `char` hasn't changed. */
   flipKey: number;
   /** Duration of the flip animation in ms. */
@@ -70,9 +89,15 @@ interface FlapCellProps {
 interface LayoutResult {
   /** rows × cols grid of single characters. */
   grid: string[][];
-  /** Map of row indices that are author attribution lines. */
-  authorRows: Record<number, true>;
+  /** Map of row index → CSS colour string for rows with explicit colours. */
+  rowColors: Record<number, string>;
 }
+
+/** Default gold colour for `@` author attribution lines. */
+const AUTHOR_COLOR = '#f5c542';
+
+/** Default text colour. */
+const DEFAULT_TEXT_COLOR = '#f0f0f0';
 
 // ---------------------------------------------------------------------------
 // Public Helpers
@@ -80,16 +105,21 @@ interface LayoutResult {
 
 /**
  * Word-wrap a plain text string into lines that fit a given column width.
- * An optional `author` is appended as a gold attribution row.
  *
  * @example
- * textToQuote('The only thing we have to fear is fear itself.', 20, 'FDR')
- * // => ['THE ONLY THING WE', 'HAVE TO FEAR IS', 'FEAR ITSELF.', '', '@FDR']
+ * textToQuote('The only thing we have to fear is fear itself.', 20, { author: 'FDR' })
+ * textToQuote('Danger!', 20, { color: '#ff4444', author: 'System', authorColor: '#aaa' })
  */
-export function textToQuote(text: string, cols: number = 20, author?: string): Quote {
+export function textToQuote(
+  text: string,
+  cols: number = 20,
+  options?: TextToQuoteOptions,
+): Quote {
+  const opts = options ?? {};
+
   const upper = text.toUpperCase();
   const words = upper.split(/\s+/);
-  const lines: string[] = [];
+  const rawLines: string[] = [];
   let current = '';
 
   for (const word of words) {
@@ -98,15 +128,21 @@ export function textToQuote(text: string, cols: number = 20, author?: string): Q
     } else if (current.length + 1 + word.length <= cols) {
       current += ' ' + word;
     } else {
-      lines.push(current);
+      rawLines.push(current);
       current = word;
     }
   }
-  if (current.length > 0) lines.push(current);
+  if (current.length > 0) rawLines.push(current);
 
-  if (author) {
-    lines.push('');
-    lines.push('@' + author.toUpperCase());
+  // Convert to QuoteLine[], applying body colour if specified
+  const lines: Quote = opts.color
+    ? rawLines.map((l) => ({ text: l, color: opts.color! }))
+    : rawLines;
+
+  if (opts.author) {
+    lines.push(opts.color ? { text: '', color: opts.color } : '');
+    const authorColor = opts.authorColor ?? AUTHOR_COLOR;
+    lines.push({ text: opts.author.toUpperCase(), color: authorColor });
   }
 
   return lines;
@@ -118,16 +154,21 @@ export function textToQuote(text: string, cols: number = 20, author?: string): Q
  * Accepted inputs:
  * - A single string → auto-wrapped into one quote
  * - An array of strings → each string becomes one auto-wrapped quote
- * - An array of `{ text, author? }` objects → auto-wrapped with optional attribution
- * - A `Quote[]` (array of string arrays) → passed through as-is
+ * - An array of `{ text, author?, color?, authorColor? }` objects
+ * - A `Quote[]` (array of arrays) → passed through as-is
  *
  * @example
  * parseQuotes('Hello world')
  * parseQuotes(['Quote one', 'Quote two'])
  * parseQuotes([{ text: 'Be yourself.', author: 'Oscar Wilde' }])
+ * parseQuotes([{ text: 'Alert!', color: '#ff4444' }])
  */
 export function parseQuotes(
-  input: string | string[] | { text: string; author?: string }[] | Quote[],
+  input:
+    | string
+    | string[]
+    | { text: string; author?: string; color?: string; authorColor?: string }[]
+    | Quote[],
   cols: number = 20,
 ): Quote[] {
   // Single string
@@ -141,15 +182,21 @@ export function parseQuotes(
 
   const first = input[0];
 
-  // Already Quote[] (array of string arrays)
+  // Already Quote[] (array of arrays)
   if (Array.isArray(first)) {
     return input as Quote[];
   }
 
-  // Array of { text, author? } objects
+  // Array of { text, author?, color?, authorColor? } objects
   if (typeof first === 'object' && first !== null && 'text' in first) {
-    return (input as { text: string; author?: string }[]).map((q) =>
-      textToQuote(q.text, cols, q.author),
+    return (
+      input as { text: string; author?: string; color?: string; authorColor?: string }[]
+    ).map((q) =>
+      textToQuote(q.text, cols, {
+        author: q.author,
+        color: q.color,
+        authorColor: q.authorColor,
+      }),
     );
   }
 
@@ -211,11 +258,22 @@ function createEmptyGrid(rows: number, cols: number): string[][] {
   return g;
 }
 
+/** Extract the plain text and optional colour from a QuoteLine. */
+function resolveLine(line: QuoteLine): { text: string; color?: string } {
+  if (typeof line === 'string') {
+    if (line.charAt(0) === '@') {
+      return { text: line.substring(1), color: AUTHOR_COLOR };
+    }
+    return { text: line };
+  }
+  return { text: line.text, color: line.color };
+}
+
 // ---------------------------------------------------------------------------
 // FlapCell — a single character cell with 3-D flip animation
 // ---------------------------------------------------------------------------
 
-const FlapCell: FC<FlapCellProps> = ({ char, isAuthor, flipKey, flipMs, onFlip }) => {
+const FlapCell: FC<FlapCellProps> = ({ char, color, flipKey, flipMs, onFlip }) => {
   const [displayChar, setDisplayChar] = useState<string>(' ');
   const [prevChar, setPrevChar] = useState<string>(' ');
   const [isFlipping, setIsFlipping] = useState<boolean>(false);
@@ -241,38 +299,37 @@ const FlapCell: FC<FlapCellProps> = ({ char, isAuthor, flipKey, flipMs, onFlip }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [char, flipKey]);
 
-  const color: string = isAuthor ? '#f5c542' : '#f0f0f0';
   const animDuration = `${flipMs / 1000}s`;
 
   return (
-    <div style={styles.cell}>
-      <div style={styles.flapDisplay}>
+    <div style={cellStyles.cell}>
+      <div style={cellStyles.flapDisplay}>
         {/* Top half — shows current character */}
-        <div style={styles.flapTop}>
-          <span style={{ ...styles.flapTopChar, color }}>{displayChar}</span>
-          <div style={styles.flapTopLine} />
+        <div style={cellStyles.flapTop}>
+          <span style={{ ...cellStyles.flapTopChar, color }}>{displayChar}</span>
+          <div style={cellStyles.flapTopLine} />
         </div>
 
         {/* Bottom half — shows incoming character (revealed as flap falls) */}
-        <div style={styles.flapBottom}>
-          <span style={{ ...styles.flapBottomChar, color }}>{char}</span>
+        <div style={cellStyles.flapBottom}>
+          <span style={{ ...cellStyles.flapBottomChar, color }}>{char}</span>
         </div>
 
         {/* Animated flip element */}
         <div
           style={{
-            ...styles.flapFlip,
+            ...cellStyles.flapFlip,
             display: isFlipping ? 'block' : 'none',
             animation: isFlipping
               ? `solari-flap-down ${animDuration} ease-in forwards`
               : 'none',
           }}
         >
-          <div style={styles.flapFlipFront}>
-            <span style={{ ...styles.flapTopChar, color }}>{prevChar}</span>
+          <div style={cellStyles.flapFlipFront}>
+            <span style={{ ...cellStyles.flapTopChar, color }}>{prevChar}</span>
           </div>
-          <div style={styles.flapFlipBack}>
-            <span style={{ ...styles.flapBottomChar, color }}>{char}</span>
+          <div style={cellStyles.flapFlipBack}>
+            <span style={{ ...cellStyles.flapBottomChar, color }}>{char}</span>
           </div>
         </div>
       </div>
@@ -288,6 +345,7 @@ const SolariBoard: FC<SolariBoardProps> = ({
   cols = 20,
   rows = 8,
   quotes = DEFAULT_QUOTES,
+  defaultColor = DEFAULT_TEXT_COLOR,
   holdMs = 5000,
   charDelay = 50,
   flipMs = 150,
@@ -298,7 +356,7 @@ const SolariBoard: FC<SolariBoardProps> = ({
   style: customStyle = {},
 }) => {
   const [grid, setGrid] = useState<string[][]>(() => createEmptyGrid(rows, cols));
-  const [authorRows, setAuthorRows] = useState<Record<number, true>>({});
+  const [rowColors, setRowColors] = useState<Record<number, string>>({});
   const [flipKeys, setFlipKeys] = useState<number[]>(() =>
     Array.from({ length: rows * cols }, () => 0),
   );
@@ -385,19 +443,18 @@ const SolariBoard: FC<SolariBoardProps> = ({
 
   // ---- Layout: position a quote's lines centred on the grid ----
   const layoutQuote = useCallback(
-    (lines: string[]): LayoutResult => {
+    (quoteLines: QuoteLine[]): LayoutResult => {
       const g = createEmptyGrid(rows, cols);
-      const aRows: Record<number, true> = {};
+      const colors: Record<number, string> = {};
 
-      const usedRows = Math.min(lines.length, rows);
+      const usedRows = Math.min(quoteLines.length, rows);
       const startRow = Math.floor((rows - usedRows) / 2);
 
       for (let l = 0; l < usedRows; l++) {
-        let line = lines[l];
-        const isAuthorLine = line.charAt(0) === '@';
-        if (isAuthorLine) {
-          line = line.substring(1);
-          aRows[startRow + l] = true;
+        const resolved = resolveLine(quoteLines[l]);
+        const line = resolved.text;
+        if (resolved.color) {
+          colors[startRow + l] = resolved.color;
         }
         const pad = Math.floor((cols - line.length) / 2);
         for (let ch = 0; ch < line.length; ch++) {
@@ -405,7 +462,7 @@ const SolariBoard: FC<SolariBoardProps> = ({
         }
       }
 
-      return { grid: g, authorRows: aRows };
+      return { grid: g, rowColors: colors };
     },
     [rows, cols],
   );
@@ -414,7 +471,7 @@ const SolariBoard: FC<SolariBoardProps> = ({
   const animateToGrid = useCallback(
     (
       targetGrid: string[][],
-      targetAuthorRows: Record<number, true>,
+      targetRowColors: Record<number, string>,
       callback?: () => void,
     ): void => {
       // Cancel any in-flight timers
@@ -474,8 +531,8 @@ const SolariBoard: FC<SolariBoardProps> = ({
         }
       }
 
-      // Apply author row styling immediately so cells flip in colour
-      setAuthorRows(targetAuthorRows);
+      // Apply row colours immediately so cells flip in their target colour
+      setRowColors(targetRowColors);
 
       // Fire callback after hold period
       if (callback) {
@@ -485,13 +542,13 @@ const SolariBoard: FC<SolariBoardProps> = ({
         timersRef.current.push(tid2);
       }
     },
-    [rows, cols, charDelay, flipMs, minGap, maxGap, holdMs],
+    [rows, cols, charDelay, minGap, maxGap, holdMs],
   );
 
   // ---- Clear board: flip all cells back to space in shuffled order ----
   const clearBoard = useCallback(
     (callback?: () => void): void => {
-      setAuthorRows({});
+      setRowColors({});
 
       let totalDelay = 0;
       const indices = Array.from({ length: rows * cols }, (_, i) => i);
@@ -530,7 +587,7 @@ const SolariBoard: FC<SolariBoardProps> = ({
         timersRef.current.push(tid);
       }
     },
-    [rows, cols, flipMs, layoutQuote],
+    [rows, cols, flipMs],
   );
 
   // ---- Main quote cycle ----
@@ -543,7 +600,7 @@ const SolariBoard: FC<SolariBoardProps> = ({
       if (!mountedRef.current) return;
       const quote = shuffledRef.current[qIndexRef.current % shuffledRef.current.length];
       const result = layoutQuote(quote);
-      animateToGrid(result.grid, result.authorRows, () => {
+      animateToGrid(result.grid, result.rowColors, () => {
         qIndexRef.current++;
         clearBoard(() => cycle());
       });
@@ -561,16 +618,16 @@ const SolariBoard: FC<SolariBoardProps> = ({
 
   // ---- Render ----
   return (
-    <div className={className} style={{ ...styles.board, ...customStyle }}>
+    <div className={className} style={{ ...boardStyles.board, ...customStyle }}>
       {Array.from({ length: rows }, (_, r) => (
-        <div key={r} style={styles.row}>
+        <div key={r} style={boardStyles.row}>
           {Array.from({ length: cols }, (_, c) => {
             const idx = r * cols + c;
             return (
               <FlapCell
                 key={idx}
                 char={grid[r][c]}
-                isAuthor={!!authorRows[r]}
+                color={rowColors[r] ?? defaultColor}
                 flipKey={flipKeys[idx]}
                 flipMs={flipMs}
                 onFlip={playClick}
@@ -589,7 +646,7 @@ export default SolariBoard;
 // Styles (inline CSSProperties — no external stylesheet needed)
 // ---------------------------------------------------------------------------
 
-const styles: Record<string, CSSProperties> = {
+const boardStyles: Record<string, CSSProperties> = {
   board: {
     display: 'flex',
     flexDirection: 'column',
@@ -604,6 +661,9 @@ const styles: Record<string, CSSProperties> = {
     display: 'flex',
     gap: '3px',
   },
+};
+
+const cellStyles: Record<string, CSSProperties> = {
   cell: {
     width: '28px',
     height: '40px',
