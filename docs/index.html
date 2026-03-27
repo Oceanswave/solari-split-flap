@@ -503,6 +503,10 @@ function App() {
     cellTimers[i] = [];
   }
 
+  function cancelAllCells() {
+    for (var i = 0; i < totalCells; i++) cancelCell(i);
+  }
+
   function flipCell(index, newChar) {
     var cell = cells[index]; if (!cell) return;
     if (currentChars[index] === newChar) return;
@@ -572,7 +576,14 @@ function App() {
     for (var r = 0; r < rows; r++) applyRowColor(r, null);
   }
 
+  // Global timer for the hold-then-callback at the end of displayQuote
+  var displayTimer = null;
+
   function displayQuote(result, callback) {
+    // Cancel ALL in-flight animations so stale timers don't corrupt the new content
+    cancelAllCells();
+    if (displayTimer) { clearTimeout(displayTimer); displayTimer = null; }
+
     var grid = result.grid, rc = result.rowColors, maxTime = 0;
     var colorApplied = {};
     for (var r = 0; r < rows; r++) {
@@ -582,20 +593,26 @@ function App() {
           // Piggyback colour update onto the first drum step for this row
           var hook = null;
           if (!colorApplied[r]) {
-            colorApplied[r] = true;
             hook = (function(row, color) { return function() { applyRowColor(row, color); }; })(r, rc[r] || null);
           }
           var dt = drumToChar(idx, target, delay, hook);
+          // Only mark colour as applied if drumToChar actually scheduled steps
+          if (hook && dt > 0) {
+            colorApplied[r] = true;
+          }
           if (delay + dt > maxTime) maxTime = delay + dt;
         }
       }
-      // If no cells changed in this row, apply colour immediately
+      // If no cell in this row scheduled the colour hook, apply it now
       if (!colorApplied[r]) {
         colorApplied[r] = true;
         applyRowColor(r, rc[r] || null);
       }
     }
-    setTimeout(function() { if (callback) setTimeout(callback, HOLD_MS); }, maxTime + 200);
+    displayTimer = setTimeout(function() {
+      displayTimer = null;
+      if (callback) setTimeout(callback, HOLD_MS);
+    }, maxTime + 200);
   }
 
   // ── Quotes ──
